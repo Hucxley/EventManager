@@ -53,7 +53,7 @@ end
 local function SortListItems(a,b)
 	local aEvent = a:GetData() 
 	local bEvent = b:GetData() 
-	return a.nSortEventData < b.nSortEventDate 
+	return aEvent.nSortEventDate < bEvent.nSortEventDate 
 end
 -----------------------------------------------------------------------------------------------
 -- Initialization
@@ -228,7 +228,7 @@ end
 function EventManager:OnDelayTimer()
 	if GameLib.GetPlayerUnit() then 
 		self.timerDelay = nil 
-		table.sort(self.tEvents,SortEventsByDate)
+		--table.sort(tEvents,SortEventsByDate)
 		if self.tMetaData.SyncChannel ~= "" then
 		self:EventsMessenger()
 	end
@@ -247,11 +247,11 @@ function EventManager:OnEventManagerOn()
 		end
 	end
 	-- sort event entries
-	table.sort(self.tEvents,SortEventsByDate)
-	table.sort(self.tEventsBacklog, SortEventsByDate)
+	--table.sort(self.tEvents,SortEventsByDate)
+	--table.sort(self.tEventsBacklog, SortEventsByDate)
 
 		-- populate the item list
-	self:PopulateItemList(self.tEvents)
+	self:PopulateItemList(tEvents)
 	
 	-- start add by Feyde
 	-- populate the security list
@@ -417,10 +417,13 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 		end
 	end
 
+
+
 	if tMsg.tEventsBacklog == nil then
 		Print("Backlog Msg empty") 
 
 		for i = #tMsgReceived.tEventsBacklog, 1, -1 do
+			Print(tMsgReceived.tEventsBacklog[i].Detail.Creator)
 			if not tMsgReceived.tEventsBacklog[i].Detail then
 				tMsg.tEventsBacklog[i] = nil
 				Print("Backlog Msg Detail empty")
@@ -927,8 +930,8 @@ function EventManager:PopulateItemList(list)
 	if list == nil then return
 	else 
 	    -- add 20 items
-		for i = 1,#list do
-			self:AddItem(i)
+		for k,v in pairs(list) do
+			self:AddItem(k)
 	        
 		end
 		

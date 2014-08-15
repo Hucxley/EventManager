@@ -275,7 +275,7 @@ function EventManager:OnDPSRoleChecked(wndHandler, wndControl, eMouseButton)
 end
 
 function EventManager:OnDPSRoleUnChecked(wndHandler, wndControl, eMouseButton)
-	self.CreatorDPSRoleStatus = 0
+	self.DPSRoleStatus = 0
 end
 
 function EventManager:OnSecurityChecked(wndHandler, wndControl, eMouseButton)
@@ -400,6 +400,7 @@ end
 function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed by Feyde.
 	local MyEvents = {}
 	local DuplicateEvent = false
+	tEventHolder = nil
 	tMsgReceived = tMsg
 	if tMsg == nil then return end
 	if self.tMetaData.SecurityRequired ~= nil and self.tMetaData.SecurityRequired == true then 
@@ -410,20 +411,24 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 		end
 	end
 
-	if tMsg.tEventsBacklog ~= nil then 
+	if tMsg.tEventsBacklog == nil then
+		Print("Backlog Msg empty") 
 
-	for i = #tMsg.tEventsBacklog, 1, -1 do
-		if tMsg.tEventsBacklog[i].Detail == nil then
-			tMsg.tEventsBacklog[i] = nil
-		
-		elseif tMsg.tEventsBacklog[i].Detail.Creator == GameLib.GetPlayerUnit():GetName() then
-			table.insert(tEventHolder,BacklogEvent)
-			tMsg.tEventsBacklog[i] = nil
+		for i = #tMsgReceived.tEventsBacklog, 1, -1 do
+			if not tMsgReceived.tEventsBacklog[i].Detail then
+				tMsg.tEventsBacklog[i] = nil
+				Print("Backlog Msg Detail empty")
 			
-			--MyEvents = self:ProcessBacklog(tEventHolder)
+			elseif tMsgReceived.tEventsBacklog[i].Detail.Creator == GameLib.GetPlayerUnit():GetName() then
+				tEventHolder[#tEventHolder + 1] = tMsgReceived.TeventsBacklog[i]
+				--tMsg.tEventsBacklog[i] = nil
+				Print("Backlog Msg processed")
+				
+				--MyEvents = self:ProcessBacklog(tEventHolder)
 
+			end
+		Print("Backlog for event not processed.  Event owned by "..tMsg.tEventsBacklog[i].Detail.Creator)
 		end
-	end
 	tBackloggedEvents = tEventHolder
 	end
 
@@ -476,14 +481,14 @@ end
 function EventManager:EventsMessenger()
 	self.tMetaData = self.tMetaData
    	local tEvents = self.tEvents
-   	local tEventsBacklog = self.tEventsBacklog
+   	tEventsBacklog = self.tEventsBacklog
     
 
     -- prepare our message to send to other users
     local t = {}
     t.tMetaData = self.tMetaData
-    t.tEvents = self.tEvents
-    t.tEventsBacklog = self.tEventsBacklog
+    t.tEvents = tEvents
+    t.tEventsBacklog = tEventsBacklog
     
     -- send the message to other users
 	if EventsChan == nil then
@@ -688,7 +693,7 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 	end
 
 	if NewEventEntry ~= nil then
-		self.tEvents[#self.tEvents + 1] {NewEventEntry}
+		self.tEvents[#self.tEvents + 1] = NewEventEntry
 	
 		NewBacklogEvent = {		
 		nEventSortValue = NewEventEntry.nEventSortValue,
@@ -704,7 +709,7 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 	end
 
 
-	self.tEventsBacklog[#self.tEventsBacklog + 1] = {BacklogEvent}
+	self.tEventsBacklog[#self.tEventsBacklog + 1] = NewBacklogEvent
 			
 	table.sort(self.tEvents,SortEventsByDate)
 	table.sort(self.tEventsBacklog, SortEventsByDate)

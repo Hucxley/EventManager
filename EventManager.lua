@@ -190,9 +190,9 @@ function EventManager:OnDocLoaded()
 		end
 		if tEvents ~= nil then
 			self.tEvents = tEvents
-			for idx, events in pairs(self.tEvents) do
-				if self.tEvents[idx].Detail.tNotAttending == nil then
-					self.tEvents[idx].Detail.tNotAttending = {{Name = nil}}
+			for key, EventId in pairs(self.tEvents) do
+				if EventId.Detail.tNotAttending == nil then
+					self.tEvents[key].Detail.tNotAttending = {{Name = nil}}
 				end
 			end 
 		else self.tEvents = {}
@@ -235,9 +235,9 @@ end
 -- on SlashCommand "/em"
 function EventManager:OnEventManagerOn()
 	self.wndMain:Invoke() -- show the window
-	for idx, event in pairs(self.tEvents) do
-		if self.tEvents[idx].nEventSortValue < tonumber(os.time())-3600 then
-			table.remove(self.tEvents,idx)
+	for key, EventId in pairs(self.tEvents) do
+		if EventId.nEventSortValue < tonumber(os.time())-3600 then
+			self.tEvents[key] = nil
 		end
 	end
 	-- sort event entries
@@ -441,24 +441,24 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 	
 	
 				
-	for idx, event in pairs(tMsg.tEvents) do
+	for MsgKey, MsgEventId in pairs(tMsg.tEvents) do
 		DuplicateEvent = false
-		for idx2, event in pairs(self.tEvents) do
-			if tMsg.tEvents[idx].EventId == self.tEvents[idx2].EventId then 
-				if tMsg.tEvents[idx].Detail.EventModified <= 	self.tEvents[idx2].Detail.EventModified and event.tCurrentAttendees == tMsg.tEvents[idx].Detail.tCurrentAttendees and 
-																event.tNotAttending == tMsg.tEvents[idx].Detail.tNotAttending then
+		for key, EventId in pairs(self.tEvents) do
+			if tMsg.tEvents[MsgKey].EventId == self.tEvents[key].EventId then 
+				if tMsg.tEvents[MsgKey].Detail.EventModified <= 	self.tEvents[key].Detail.EventModified and EventId.tCurrentAttendees == tMsg.tEvents[MsgKey].Detail.tCurrentAttendees and 
+																event.tNotAttending == tMsg.tEvents[MsgKey].Detail.tNotAttending then
 					DuplicateEvent = true
 					--Print("Duplicate event ignored.")
 				else
-					self.tEvents[idx2] = tMsg.tEvents[idx]
-					self.tEvents[idx2].Detail.EventModified = os.time()
+					self.tEvents[key] = tMsg.tEvents[MsgKey]
+					self.tEvents[key].Detail.EventModified = os.time()
 					DuplicateEvent = true
 				end
 			end	
 		end
 		if DuplicateEvent == false then
-			tMsg.tEvents[idx].Detail.EventModified = os.time()
-			table.insert(self.tEvents, tMsg.tEvents[idx])
+			tMsg.tEvents[MsgKey].Detail.EventModified = os.time()
+			table.insert(self.tEvents, tMsg.tEvents[MsgKey])
 			Print("Events Manager: New Events received from sync channel.")
 		end
 	end
@@ -498,9 +498,9 @@ function EventManager:EventsMessenger()
 end
 
 function EventManager:CleanListToPopulate()
-	for idx, event in pairs(self.tEvents) do
-		if self.tEvents[idx].nEventSortValue < tonumber(os.time())-3600 then
-			self.tEvents[idx] = nil
+	for key, EventId in pairs(self.tEvents) do
+		if self.tEvents[key].nEventSortValue < tonumber(os.time())-3600 then
+			self.tEvents[key] = nil
 		end
 	end
 	return self.tEvents
@@ -601,24 +601,24 @@ end
 
 function EventManager:OnSignUpSubmit(wndHandler, wndControl, eMouseButton)
 	local SelectedEvent = wndControl:GetParent():GetData()
-	local EventId = SelectedEvent.EventId
+	local SelectedEventId = SelectedEvent.EventId
 	local EventName = SelectedEvent.Detail.EventName
 	local bSignUpTank = self.wndSignUp:FindChild("TankRoleButton"):IsChecked()
 	local bSignUpHealer = self.wndSignUp:FindChild("HealerRoleButton"):IsChecked()
 	local bSignUpDPS = self.wndSignUp:FindChild("DPSRoleButton"):IsChecked()
 	local NewAttendeeInfo = {["Name"] = GameLib.GetPlayerUnit():GetName(),["nSignUpTime"] = os.time(), 
 							["Roles"] = self:GetSelectedRoles(bSignUpTank ,bSignUpHealer ,bSignUpDPS )}
-	for idx, events in pairs(self.tEvents) do
-	local CurrentAttendees = self.tEvents[idx].Detail.tCurrentAttendees
-	local CurrentDeclined = self.tEvents[idx].Detail.tNotAttending
-		if self.tEvents[idx].EventId == EventId then
+	for key, EventId in pairs(self.tEvents) do
+	local CurrentAttendees = self.tEvents[key].Detail.tCurrentAttendees
+	local CurrentDeclined = self.tEvents[key].Detail.tNotAttending
+		if self.tEvents[key].EventId == SelectedEventId then
 			table.insert(CurrentAttendees, NewAttendeeInfo)
-			for idx2, name in pairs(CurrentDeclined) do
-				if CurrentDeclined[idx2].Name == GameLib.GetPlayerUnit():GetName() then
-					table.remove(self.tEvents[idx].Detail.tNotAttending,idx2)
+			for idx, name in pairs(CurrentDeclined) do
+				if CurrentDeclined[idx].Name == GameLib.GetPlayerUnit():GetName() then
+					table.remove(self.tEvents[key].Detail.tNotAttending,idx)
 				end
 			end
-			self.tEvents[idx].Detail.EventModified = os.time()
+			self.tEvents[key].Detail.EventModified = os.time()
 		end
 	end
 	
@@ -688,7 +688,7 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 	end
 
 	if NewEventEntry ~= nil then
-		table.insert(self.tEvents,NewEventEntry)
+		self.tEvents[#self.tEvents + 1] {NewEventEntry}
 	
 		NewBacklogEvent = {		
 		nEventSortValue = NewEventEntry.nEventSortValue,
@@ -704,7 +704,7 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 	end
 
 
-	table.insert(self.tEventsBacklog, NewBacklogEvent)
+	self.tEventsBacklog[#self.tEventsBacklog + 1] = {BacklogEvent}
 			
 	table.sort(self.tEvents,SortEventsByDate)
 	table.sort(self.tEventsBacklog, SortEventsByDate)
@@ -723,14 +723,14 @@ function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
   local tNotAttending = tEventInfo.tNotAttending
   local PlayerFound = false
  
-  for idx, event in pairs(self.tEvents) do
-    if event.EventId == nEventID then
-      for idx2, attendee in pairs (tEventInfo.tCurrentAttendees) do
+  for key, Event in pairs(self.tEvents) do
+    if Event == nEventID then
+      for idx, attendee in pairs (tEventInfo.tCurrentAttendees) do
         if attendee.Name == GameLib.GetPlayerUnit():GetName() then
  
-          table.remove(event.Detail.tCurrentAttendees, idx2)
+          table.remove(Event.Detail.tCurrentAttendees, idx)
           -- Since you are using insert/remove you can get this attendeeCount by: #tEventInfo.tCurrentAttendees
-          table.insert(event.Detail.tNotAttending, {["Name"] = GameLib.GetPlayerUnit():GetName()})
+          table.insert(Event.Detail.tNotAttending, {["Name"] = GameLib.GetPlayerUnit():GetName()})
           self.wndSelectedListItemDetail:Show(true)
           tEventInfo.EventModified = os.time()
           PlayerFound = true
@@ -738,13 +738,13 @@ function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
       end
  
       if not PlayerFound then
-        for idx3, player in pairs(tEventInfo.tNotAttending) do
+        for idx2, player in pairs(tEventInfo.tNotAttending) do
           if player.Name == GameLib.GetPlayerUnit():GetName() then
             Print("You have already declined this event.")
             return
           else
             Print("You have declined the event.")
-            table.insert(self.tEvents[idx].Detail.tNotAttending, {["Name"] = GameLib.GetPlayerUnit():GetName()})
+            self.tEvents[idx2].Detail.tNotAttending = {["Name"] = GameLib.GetPlayerUnit():GetName()}
             Print("Not Attending table updated")
             tEventInfo.EventModified = os.time()
             wndControl:GetParent():FindChild("DeclineButton"):Show(false)  
@@ -785,10 +785,10 @@ end
 function EventManager:OnDeleteConfirmation(wndHandler, wndControl, eMouseButton)
 	local SelectedEvent = wndControl:GetParent():GetData()
 	local nEventId = SelectedEvent.EventId	
-	for idx, event in pairs(self.tEvents) do
-		if self.tEvents[idx].EventId == nEventId then
-			if self.tEvents[idx].Detail.Creator == GameLib.GetPlayerUnit():GetName() then
-				self.tEvents[idx].strEventStatus = "Canceled"
+	for key, event in pairs(self.tEvents) do
+		if event.EventId == nEventId then
+			if event.Detail.Creator == GameLib.GetPlayerUnit():GetName() then
+				event.strEventStatus = "Canceled"
 				Print("Events Manager: The event has been removed.")
 			else
 				Print("Events Manager Error: Only the creator of an event may cancel an event.")
@@ -849,7 +849,7 @@ function EventManager:OnEventEditSubmit(wndHandler,wndControl,eMouseButton)
 	local EditedEvent = wndControl:GetParent():GetData()
 	local wndEdit = wndControl:GetParent()
 	--EditEvent = {}
-	for idx, event in pairs(self.tEvents) do
+	for key, event in pairs(self.tEvents) do
 		if EditedEvent.EventId == event.EventId then
 			event.Detail = {
 			EventName = wndEdit:FindChild("EventNameBox"):GetText(),
@@ -889,9 +889,9 @@ function EventManager:OnEventEditSubmit(wndHandler,wndControl,eMouseButton)
 			end	
 			
 		end
-		for idx2, name in pairs (self.tEvents[idx].Detail.tCurrentAttendees) do
-			if self.tEvents[idx].Detail.tCurrentAttendees[idx2].Name == GameLib.GetPlayerUnit():GetName() then
-				self.tEvents[idx].Detail.tCurrentAttendees[idx2].Roles = 	{self:GetSelectedRoles(wndEdit:FindChild("TankRoleButton"):IsChecked(),
+		for idx2, name in pairs (self.tEvents[key].Detail.tCurrentAttendees) do
+			if self.tEvents[key].Detail.tCurrentAttendees[idx2].Name == GameLib.GetPlayerUnit():GetName() then
+				self.tEvents[key].Detail.tCurrentAttendees[idx2].Roles = 	{self:GetSelectedRoles(wndEdit:FindChild("TankRoleButton"):IsChecked(),
 																			wndEdit:FindChild("HealerRoleButton"):IsChecked(),
 																			wndEdit:FindChild("DPSRoleButton"):IsChecked())}
 			end
@@ -1010,8 +1010,8 @@ function EventManager:AddItem(i)
 		wndItemText:SetTextColor(kcrNormalText)
 	end
 	local AttendeeList = {"Signed up for Event: \n \n"}
-	for idx, name in pairs(tEventInfo.tCurrentAttendees) do
-		table.insert(AttendeeList, tEventInfo.tCurrentAttendees[idx].Name)
+	for key, name in pairs(tEventInfo.tCurrentAttendees) do
+		AttendeeList = {tEventInfo.tCurrentAttendees[key].Name}
 	end
 	wnd:SetTooltip(table.concat(AttendeeList, '\n'))
 	wnd:SetData(tEvent)
@@ -1048,16 +1048,16 @@ function EventManager:OnListItemSelected(wndHandler, wndControl)
    	self.wndSelectedListItemDetail:SetData(SelectedEventData)
 	local tAttendingSelectedItem = {}
 	local tNotAttendingSelectedItem = {}
-	for idx, name in pairs(selectedItemText.tCurrentAttendees) do
-		table.insert(tAttendingSelectedItem, selectedItemText.tCurrentAttendees[idx].Name.." ("
-					..selectedItemText.tCurrentAttendees[idx].Roles.Tank.."/"..selectedItemText.tCurrentAttendees[idx].Roles.Healer.."/"
-					..selectedItemText.tCurrentAttendees[idx].Roles.DPS..")")
+	for key, name in pairs(selectedItemText.tCurrentAttendees) do
+		tAttendingSelectedItem = {selectedItemText.tCurrentAttendees[key].Name.." ("
+					..selectedItemText.tCurrentAttendees[key].Roles.Tank.."/"..selectedItemText.tCurrentAttendees[key].Roles.Healer.."/"
+					..selectedItemText.tCurrentAttendees[key].Roles.DPS..")"}
 	end
-	for idx, name in pairs(selectedItemText.tNotAttending) do
-		table.insert(tNotAttendingSelectedItem, selectedItemText.tNotAttending[idx].Name)
+	for key, name in pairs(selectedItemText.tNotAttending) do
+		tNotAttendingSelectedItem = {Name = selectedItemText.tNotAttending[key].Name}
 	end
-	for idx, event in pairs(self.tEvents) do
-		if SelectedEvent.Detail.Creator == GameLib.GetPlayerUnit():GetName() then
+	for key, event in pairs(self.tEvents) do
+		if SelectedEvent.Detail.Creator == event.Detail.Creator then --GameLib.GetPlayerUnit():GetName() then
 			self.wndSelectedListItemDetail:FindChild("EditEventButton"):Show(true)
 		else
 			self.wndSelectedListItemDetail:FindChild("EditEventButton"):Show(false)

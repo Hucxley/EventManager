@@ -49,6 +49,12 @@ local kcrNormalText = ApolloColor.new("UI_BtnTextHoloNormal")
 local function SortEventsByDate(a,b)
 	return a.nEventSortValue < b.nEventSortValue
 end 
+
+local function SortListItems(a,b)
+	local aEvent = a:GetData() 
+	local bEvent = b:GetData() 
+	return a.nSortEventData < b.nSortEventDate 
+end
 -----------------------------------------------------------------------------------------------
 -- Initialization
 -----------------------------------------------------------------------------------------------
@@ -644,8 +650,8 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 	NewBacklogEvent = {}
 	
 	NewEventEntry = {
-		nEventSortValue = os.time(),
 		EventId = GameLib.GetRealmName()..os.time(),
+		nEventSortValue = os.time(),
 		strEventStatus = "Active",
 		Detail  = {
 			EventName = self.wndNew:FindChild("EventNameBox"):GetText(),
@@ -693,7 +699,7 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 	end
 
 	if NewEventEntry ~= nil then
-		self.tEvents[#self.tEvents + 1] = NewEventEntry
+		self.tEvents[GameLib.GetRealmName()..os.time()] = NewEventEntry
 	
 		NewBacklogEvent = {		
 		nEventSortValue = NewEventEntry.nEventSortValue,
@@ -709,12 +715,12 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 	end
 
 
-	self.tEventsBacklog[#self.tEventsBacklog + 1] = NewBacklogEvent
+	self.tEventsBacklog[NewEventEntry.EventId] = NewBacklogEvent
 			
-	table.sort(self.tEvents,SortEventsByDate)
-	table.sort(self.tEventsBacklog, SortEventsByDate)
+	--table.sort(self.tEvents,SortEventsByDate)
+	--table.sort(self.tEventsBacklog, SortEventsByDate)
 	self.wndNew:Show(false)
-	self:PopulateItemList(self.tEvents)
+	self:PopulateItemList(tEvents)
 	self.tMetaData.nLatestUpdate = os.time()
 	self:EventsMessenger()
 end
@@ -927,7 +933,7 @@ function EventManager:PopulateItemList(list)
 		end
 		
 		-- now all the item are added, call ArrangeChildrenVert to list out the list items vertically
-		self.wndItemList:ArrangeChildrenVert()
+		self.wndItemList:ArrangeChildrenVert(0,SortListItems)
 	end
 
 end

@@ -53,7 +53,7 @@ end
 local function SortListItems(a,b)
 	local aEvent = a:GetData() 
 	local bEvent = b:GetData() 
-	return aEvent.nSortEventDate < bEvent.nSortEventDate 
+	return (aEvent.nEventSortValue or 0) < (bEvent.nEventSortValue or 0)
 end
 -----------------------------------------------------------------------------------------------
 -- Initialization
@@ -83,8 +83,8 @@ function EventManager:OnSave(eLevel)
  if (eLevel ~= GameLib.CodeEnumAddonSaveLevel.Character) then
 		return
 	end
-	local tEvents = self.tEvents
-	local tEventsBacklog = self.tEventsBacklog
+	local tEvents = tEvents
+	local tEventsBacklog = tEventsBacklog
 	local tMetaData = self.tMetaData
 	local tSecurity = self.tSecurity	-- added by Feyde
 
@@ -195,17 +195,17 @@ function EventManager:OnDocLoaded()
 			self.tMetaData.nLatestUpdate = 0
 		end
 		if tEvents ~= nil then
-			self.tEvents = tEvents
-			for key, EventId in pairs(self.tEvents) do
+			tEvents = tEvents
+			for key, EventId in pairs(tEvents) do
 				if EventId.Detail.tNotAttending == nil then
-					self.tEvents[key].Detail.tNotAttending = {{Name = nil}}
+					tEvents[key].Detail.tNotAttending = {{Name = nil}}
 				end
 			end 
-		else self.tEvents = {}
+		else tEvents = {}
 		end
 
 		if tEventsBacklog ~= nil then 
-			self.tEventsBacklog = tEventsBacklog
+			tEventsBacklog = tEventsBacklog
 		end
 		
 		-- start add by Feyde
@@ -241,14 +241,14 @@ end
 -- on SlashCommand "/em"
 function EventManager:OnEventManagerOn()
 	self.wndMain:Invoke() -- show the window
-	for key, EventId in pairs(self.tEvents) do
+	for key, EventId in pairs(tEvents) do
 		if EventId.nEventSortValue < tonumber(os.time())-3600 then
-			self.tEvents[key] = nil
+			tEvents[key] = nil
 		end
 	end
 	-- sort event entries
-	--table.sort(self.tEvents,SortEventsByDate)
-	--table.sort(self.tEventsBacklog, SortEventsByDate)
+	--table.sort(tEvents,SortEventsByDate)
+	--table.sort(tEventsBacklog, SortEventsByDate)
 
 		-- populate the item list
 	self:PopulateItemList(tEvents)
@@ -457,30 +457,30 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 				
 	for MsgKey, MsgEventId in pairs(tMsg.tEvents) do
 		DuplicateEvent = false
-		for key, EventId in pairs(self.tEvents) do
-			if tMsg.tEvents[MsgKey].EventId == self.tEvents[key].EventId then 
-				if tMsg.tEvents[MsgKey].Detail.EventModified <= 	self.tEvents[key].Detail.EventModified and EventId.tCurrentAttendees == tMsg.tEvents[MsgKey].Detail.tCurrentAttendees and 
+		for key, EventId in pairs(tEvents) do
+			if tMsg.tEvents[MsgKey].EventId == tEvents[key].EventId then 
+				if tMsg.tEvents[MsgKey].Detail.EventModified <= 	tEvents[key].Detail.EventModified and EventId.tCurrentAttendees == tMsg.tEvents[MsgKey].Detail.tCurrentAttendees and 
 																event.tNotAttending == tMsg.tEvents[MsgKey].Detail.tNotAttending then
 					DuplicateEvent = true
 					--Print("Duplicate event ignored.")
 				else
-					self.tEvents[key] = tMsg.tEvents[MsgKey]
-					self.tEvents[key].Detail.EventModified = os.time()
+					tEvents[key] = tMsg.tEvents[MsgKey]
+					tEvents[key].Detail.EventModified = os.time()
 					DuplicateEvent = true
 				end
 			end	
 		end
 		if DuplicateEvent == false then
 			tMsg.tEvents[MsgKey].Detail.EventModified = os.time()
-			table.insert(self.tEvents, tMsg.tEvents[MsgKey])
+			table.insert(tEvents, tMsg.tEvents[MsgKey])
 			Print("Events Manager: New Events received from sync channel.")
 		end
 	end
 			
 	self.tMetaData.nLatestUpdate = os.time()
 
-	table.sort(self.tEvents,SortEventsByDate)
-	self:PopulateItemList(self.tEvents)
+	table.sort(tEvents,SortEventsByDate)
+	self:PopulateItemList(tEvents)
 	if self.tMetaData.nLatestUpdate ~= tMsg.tMetaData.nLatestUpdate then
 		self:EventsMessenger()
 	end
@@ -489,8 +489,8 @@ end
 
 function EventManager:EventsMessenger()
 	self.tMetaData = self.tMetaData
-   	local tEvents = self.tEvents
-   	tEventsBacklog = self.tEventsBacklog
+   	local tEvents = tEvents
+   	tEventsBacklog = tEventsBacklog
     
 
     -- prepare our message to send to other users
@@ -502,7 +502,7 @@ function EventManager:EventsMessenger()
     -- send the message to other users
 	if EventsChan == nil then
 		Print("Events Manager Error: Cannot send sync data unless sync channel has been selected")
-		self:PopulateItemList(self.tEvents)
+		self:PopulateItemList(tEvents)
 	else
 	    EventsChan:SendMessage(t)
 		--Print("Events Manager: Event update sent to sync'd users.")
@@ -512,12 +512,12 @@ function EventManager:EventsMessenger()
 end
 
 function EventManager:CleanListToPopulate()
-	for key, EventId in pairs(self.tEvents) do
-		if self.tEvents[key].nEventSortValue < tonumber(os.time())-3600 then
-			self.tEvents[key] = nil
+	for key, EventId in pairs(tEvents) do
+		if EventId.nEventSortValue < tonumber(os.time())-3600 then
+			tEvents[key] = nil
 		end
 	end
-	return self.tEvents
+	return tEvents
 end
 
 
@@ -602,7 +602,7 @@ function EventManager:OnSignUpFormShow (SelectedEvent)
 	self.wndSignUp:FindChild("TankRoleButton"):SetCheck(false)
 	self.wndSignUp:FindChild("HealerRoleButton"):SetCheck(false)
 	self.wndSignUp:FindChild("DPSRoleButton"):SetCheck(false)
-	local EventId = SelectedEvent.EventId
+	local EventId = SelectedEvent
 	local EventName = SelectedEvent.Detail.EventName
 	local EventDescription = SelectedEvent.Detail.Description
 	local EventSignUpHeader = EventName.."\n"..string.format("%02d",SelectedEvent.Detail.Month).."/"..string.format("%02d",SelectedEvent.Detail.Day)..
@@ -622,22 +622,22 @@ function EventManager:OnSignUpSubmit(wndHandler, wndControl, eMouseButton)
 	local bSignUpDPS = self.wndSignUp:FindChild("DPSRoleButton"):IsChecked()
 	local NewAttendeeInfo = {["Name"] = GameLib.GetPlayerUnit():GetName(),["nSignUpTime"] = os.time(), 
 							["Roles"] = self:GetSelectedRoles(bSignUpTank ,bSignUpHealer ,bSignUpDPS )}
-	for key, EventId in pairs(self.tEvents) do
-	local CurrentAttendees = self.tEvents[key].Detail.tCurrentAttendees
-	local CurrentDeclined = self.tEvents[key].Detail.tNotAttending
-		if self.tEvents[key].EventId == SelectedEventId then
+	for key, EventId in pairs(tEventsBackup) do
+	local CurrentAttendees = tEvents[key].Detail.tCurrentAttendees
+	local CurrentDeclined = tEvents[key].Detail.tNotAttending
+		if tEvents[key].EventId == SelectedEventId then
 			table.insert(CurrentAttendees, NewAttendeeInfo)
 			for idx, name in pairs(CurrentDeclined) do
 				if CurrentDeclined[idx].Name == GameLib.GetPlayerUnit():GetName() then
-					table.remove(self.tEvents[key].Detail.tNotAttending,idx)
+					table.remove(tEvents[key].Detail.tNotAttending,idx)
 				end
 			end
-			self.tEvents[key].Detail.EventModified = os.time()
+			tEvents[key].Detail.EventModified = os.time()
 		end
 	end
 	
 	Print("Sign Up Completed for "..EventName)
-	self:PopulateItemList(self.tEvents.EventId)
+	self:PopulateItemList(tEvents.EventId)
 	self.wndSignUp:Show(false)
 	self.tMetaData.nLatestUpdate = os.time()
 	self:EventsMessenger()
@@ -702,7 +702,7 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 	end
 
 	if NewEventEntry ~= nil then
-		self.tEvents[GameLib.GetRealmName()..os.time()] = NewEventEntry
+		tEvents[GameLib.GetRealmName()..os.time()] = NewEventEntry
 	
 		NewBacklogEvent = {		
 		nEventSortValue = NewEventEntry.nEventSortValue,
@@ -718,10 +718,10 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 	end
 
 
-	self.tEventsBacklog[NewEventEntry.EventId] = NewBacklogEvent
+	tEventsBacklog[NewEventEntry.EventId] = NewBacklogEvent
 			
-	--table.sort(self.tEvents,SortEventsByDate)
-	--table.sort(self.tEventsBacklog, SortEventsByDate)
+	--table.sort(tEvents,SortEventsByDate)
+	--table.sort(tEventsBacklog, SortEventsByDate)
 	self.wndNew:Show(false)
 	self:PopulateItemList(tEvents)
 	self.tMetaData.nLatestUpdate = os.time()
@@ -737,7 +737,7 @@ function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
   local tNotAttending = tEventInfo.tNotAttending
   local PlayerFound = false
  
-  for key, Event in pairs(self.tEvents) do
+  for key, Event in pairs(tEvents) do
     if Event == nEventID then
       for idx, attendee in pairs (tEventInfo.tCurrentAttendees) do
         if attendee.Name == GameLib.GetPlayerUnit():GetName() then
@@ -758,7 +758,7 @@ function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
             return
           else
             Print("You have declined the event.")
-            self.tEvents[idx2].Detail.tNotAttending = {["Name"] = GameLib.GetPlayerUnit():GetName()}
+            tEvents[idx2].Detail.tNotAttending = {["Name"] = GameLib.GetPlayerUnit():GetName()}
             Print("Not Attending table updated")
             tEventInfo.EventModified = os.time()
             wndControl:GetParent():FindChild("DeclineButton"):Show(false)  
@@ -767,7 +767,7 @@ function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
       end
     end
   end
-  self:PopulateItemList(self.tEvents)
+  self:PopulateItemList(tEvents)
   self.tMetaData.nLatestUpdate = os.time()
   self:EventsMessenger()
 end
@@ -799,7 +799,7 @@ end
 function EventManager:OnDeleteConfirmation(wndHandler, wndControl, eMouseButton)
 	local SelectedEvent = wndControl:GetParent():GetData()
 	local nEventId = SelectedEvent.EventId	
-	for key, event in pairs(self.tEvents) do
+	for key, event in pairs(tEvents) do
 		if event.EventId == nEventId then
 			if event.Detail.Creator == GameLib.GetPlayerUnit():GetName() then
 				event.strEventStatus = "Canceled"
@@ -814,7 +814,7 @@ function EventManager:OnDeleteConfirmation(wndHandler, wndControl, eMouseButton)
 self.wndDeleteConfirm:Show(false)
 self:EventsMessenger()
 self.tMetaData.nLatestUpdate = os.time()
-self:PopulateItemList(self.tEvents)
+self:PopulateItemList(tEvents)
 
 
 end
@@ -863,7 +863,7 @@ function EventManager:OnEventEditSubmit(wndHandler,wndControl,eMouseButton)
 	local EditedEvent = wndControl:GetParent():GetData()
 	local wndEdit = wndControl:GetParent()
 	--EditEvent = {}
-	for key, event in pairs(self.tEvents) do
+	for key, event in pairs(tEvents) do
 		if EditedEvent.EventId == event.EventId then
 			event.Detail = {
 			EventName = wndEdit:FindChild("EventNameBox"):GetText(),
@@ -903,9 +903,9 @@ function EventManager:OnEventEditSubmit(wndHandler,wndControl,eMouseButton)
 			end	
 			
 		end
-		for idx2, name in pairs (self.tEvents[key].Detail.tCurrentAttendees) do
-			if self.tEvents[key].Detail.tCurrentAttendees[idx2].Name == GameLib.GetPlayerUnit():GetName() then
-				self.tEvents[key].Detail.tCurrentAttendees[idx2].Roles = 	{self:GetSelectedRoles(wndEdit:FindChild("TankRoleButton"):IsChecked(),
+		for idx2, name in pairs (tEvents[key].Detail.tCurrentAttendees) do
+			if tEvents[key].Detail.tCurrentAttendees[idx2].Name == GameLib.GetPlayerUnit():GetName() then
+				tEvents[key].Detail.tCurrentAttendees[idx2].Roles = 	{self:GetSelectedRoles(wndEdit:FindChild("TankRoleButton"):IsChecked(),
 																			wndEdit:FindChild("HealerRoleButton"):IsChecked(),
 																			wndEdit:FindChild("DPSRoleButton"):IsChecked())}
 			end
@@ -914,7 +914,7 @@ function EventManager:OnEventEditSubmit(wndHandler,wndControl,eMouseButton)
 	self.wndEditEvent:Show(false)
 	self:EventsMessenger()
 	self.tMetaData.nLatestUpdate = os.time()
-	self:PopulateItemList(self.tEvents)	
+	self:PopulateItemList(tEvents)	
 end
 
 
@@ -930,13 +930,12 @@ function EventManager:PopulateItemList(list)
 	if list == nil then return
 	else 
 	    -- add 20 items
-		for k,v in pairs(list) do
-			self:AddItem(k)
+		for Event, EventId in pairs(list) do
+			Print(Event)
+			self:AddItem(Event)
 	        
 		end
-		
-		-- now all the item are added, call ArrangeChildrenVert to list out the list items vertically
-		self.wndItemList:ArrangeChildrenVert(0,SortListItems)
+			self.wndItemList:ArrangeChildrenVert(0,SortListItems)
 	end
 
 end
@@ -964,7 +963,9 @@ function EventManager:AddItem(i)
 	
 	-- keep track of the window item created
 	self.tItems[i] = wnd
-	local tEvent = self.tEvents[i]
+
+	-- Build text for display in list item
+	local tEvent = tEvents[i]
 	local tEventInfo = tEvent.Detail
 	local tEventAttendees = tEventInfo.tCurrentAttendees
 	local tEventRoles = tEventInfo.tCurrentAttendees
@@ -1070,7 +1071,7 @@ function EventManager:OnListItemSelected(wndHandler, wndControl)
 	for key, name in pairs(selectedItemText.tNotAttending) do
 		tNotAttendingSelectedItem = {Name = selectedItemText.tNotAttending[key].Name}
 	end
-	for key, event in pairs(self.tEvents) do
+	for key, event in pairs(tEvents) do
 		if SelectedEvent.Detail.Creator == event.Detail.Creator then --GameLib.GetPlayerUnit():GetName() then
 			self.wndSelectedListItemDetail:FindChild("EditEventButton"):Show(true)
 		else

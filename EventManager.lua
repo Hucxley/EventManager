@@ -1144,25 +1144,46 @@ function EventManager:OnWindowManagementReady()
 end
 
 function EventManager:ProcessBacklog(t)
+	SendVarToRover("Backlog", t)
 	tReceived = t
-	tPendingAttendees = t.Detail.tCurrentAttendees
-	for event, EventId in pairs(tEvents) do
-		tKnownAttendees = EventId.Detail.tCurrentAttendees
-		if EventId == t.EventId then
-			for idx, name in pairs(tKnownAttendees) do
+	for k,PendingEventId in pairs(t) do
+		
+		tPendingAttendees = PendingEventId.Detail.tCurrentAttendees
+	
+		for event, EventId in pairs(tEvents) do
+			tKnownAttendees = EventId.Detail.tCurrentAttendees
+			Print(EventId.EventId)
+			Print(PendingEventId.EventId)
+			if EventId.EventId == PendingEventId.EventId then
 				for idx2, PendingPlayer in pairs(tPendingAttendees) do
-					if tKnownAttendees[idx].Name == GameLib.GetPlayerUnit():GetName() then
-							if tEvents.Detail.tCurrentAttendees[idx].Status ~= "Registered" then
-								tEvents.Detail.tCurrentAttendees[idx].Status = "Registered"
-								t.Detail.tCurrentAttendees[idx2] = {}
+					for idx2, name in pairs(tKnownAttendees) do
+						Print(tPendingAttendees[idx2].Name)
+
+						-- Check if player created the event and somehow is on the pending list, dump if so
+						if EventId.Detail.Creator == GameLib.GetPlayerUnit():GetName() and tPendingAttendees[idx].Name == EventId.Detail.Creator then 
+							if tKnownAttendees[idx2].Name == tPendingAttendees[idx].Name then
+								Print("A duplicate event was removed from your pending events.")
+								t = {}
+								return t
 							end
-					elseif tKnownAttendees[idx].Name == tPendingAttendees[idx2].Name then
-						if tPendingAttendees[idx2].Status ~= "Registered" then
-								t.Detail.tCurrentAttendees[idx2].Status = "Registered"
-							
+						end	
+
+						-- Check if event owner has recorded the player's status for the event, dump if so.
+						if tKnownAttendees[idx2].Name == GameLib.GetPlayerUnit():GetName() and tKnownAttendees[idx2].Status == tPendingAttendees[idx].Status then
+							Print("Your status..("tKnownAttendees[idx2].Status") for the event "..EventId.Detail.EventName.." has been confirmed.")
+								t = {}
+								return t								
+								
+						-- Event Owner creates a record of the player's status in the event's attendees list and updates the pending table.
+						elseif tKnownAttendees[idx2].Name ~= tPendingAttendees[idx].Name then --and tPendingAttendees[idx2].Status ~= "Registered" then
+								--table.insert(tEvents[event].Detail.tCurrentAttendees, tPendingAttendees[idx2])
+								tEvents[event].Detail.tCurrentAttendees[idx2+1].Status = tPendingAttendees[idx]
+								t[k].Detail.tCurrentAttendees[idx].Status = tPendingAttendees[idx].status
+								Print("Player "..tPendingAttendees[idx].Name.." has been confirmed for "..EventId.Detail.EventName..".")
+								
+								return t								
 						else
-							table.insert(EventId.Detail.tCurrentAttendees, tPendingAttendees[idx2])
-							EventId.Detail.tCurrentAttendees[idx+1].Status = "Registered"
+							Print("Everything failed")
 						end
 					end
 				end

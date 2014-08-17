@@ -281,6 +281,7 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 				tEventsBacklog[event], MessageToSend, ModifiedTime = self:ProcessBacklog(BacklogEvent)
 				if ModifiedTime ~= nil and ModifiedTime > 0 then 
 					tEvents[event].Detail.EventModified = ModifiedTime
+					tEvents[event].Detail.tCurrentAttendees = self:TableLength(tEvents[event].Detail.tCurrentAttendees)
 					tMetaData.nLatestUpdate = ModifiedTime
 				end
 
@@ -624,30 +625,41 @@ end
 
 function EventManager:OnSignUpSubmit(wndHandler, wndControl, eMouseButton)
 	local SelectedEvent = wndControl:GetParent():GetData()
-	local SelectedEventId = SelectedEvent
+	local SelectedEventId = SelectedEvent.EventId
 	local EventName = SelectedEvent.Detail.EventName
 	local bSignUpTank = self.wndSignUp:FindChild("TankRoleButton"):IsChecked()
 	local bSignUpHealer = self.wndSignUp:FindChild("HealerRoleButton"):IsChecked()
 	local bSignUpDPS = self.wndSignUp:FindChild("DPSRoleButton"):IsChecked()
-	local NewAttendeeInfo = {["Name"] = GameLib.GetPlayerUnit():GetName(),["Status"] = "Attending", ["nSignUpTime"] = os.time(), 
+	local tNewAttendeeInfo = {["Name"] = GameLib.GetPlayerUnit():GetName(),["Status"] = "Attending", ["nSignUpTime"] = os.time(), 
 							["Roles"] = self:GetSelectedRoles(bSignUpTank ,bSignUpHealer ,bSignUpDPS )}
-	for key, EventId in pairs(tEventsBackup) do
-	local CurrentAttendees = tEvents[key].Detail.tCurrentAttendees
-
-		if tEvents[key].EventId == SelectedEventId then
-			table.insert(CurrentAttendees, NewAttendeeInfo)
-			for idx, name in pairs(CurrentDeclined) do
-				if CurrentDeclined[idx].Name == GameLib.GetPlayerUnit():GetName() then
-					table.remove(tEvents[key].Detail.tNotAttending,idx)
-				end
+	if tEventsBacklog == nil or tEventsBacklog == { } then
+		tEventsBacklog[SelectedEventId] = {
+  		nEventSortValue = SelectedEvent.nEventSortValue,
+			EventId = SelectedEvent.EventId,
+			strEventStatus = SelectedEvent.strEventStatus,
+			Detail  = {
+				Creator = tEvent.Detail.Creator,
+				--CreatorRoles = self:GetSelectedRoles(bCreatorTank,bCreatorHealer,bCreatorDPS),
+				tCurrentAttendees = NewAttendeeInfo,	
+				EventModified = SelectedEvent.Detail.EventModified,
+					
+			},}
+			MsgTrigger = "New attendee created new backlog for this event."
+	else
+		for key, EventId in pairs(tEventsBacklog) do
+			local CurrentAttendees = EventId.Detail.tCurrentAttendees
+			if tEventsBacklog[key].EventId == SelectedEventId then
+				tEventsBacklog[key].Detail.CurrentAttendees = tNewAttendeeInfo
+				tEventsBacklog[key].Detail.EventModified = os.time()
+				MsgTrigger = "Player Added to existing Backlog"
 			end
-			tEvents[key].Detail.EventModified = os.time()
 		end
 	end
+
 	
 
 	Print("Sign Up Completed for "..EventName)
-	self:PopulateItemList(tEvents.EventId)
+	self:PopulateItemList(tEvents)
 	self.wndSignUp:Show(false)
 	tMetaData.nLatestUpdate = os.time()
 	MsgTrigger = "SignUpSubmit"
@@ -656,42 +668,65 @@ end
 
 
 function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
-  tEvent = wndControl:GetParent():GetData()
-  self.wndSelectedListItem = wndControl:GetParent()
-  local nEventID = tEvent.EventId
-  local tEventInfo = tEvent.Detail
-  local tEventAttendees = tEventInfo.tCurrentAttendees
-  local tNotAttending = tEventInfo.tNotAttending
-  local PlayerFound = false
- 
-  for key, Event in pairs(tEventsBacklog) do
+	local tEvent = wndControl:GetParent():GetData()
+	self.wndSelectedListItem = wndControl:GetParent()
+	local nEventID = tEvent.EventId
+	local tEventInfo = tEvent.Detail
+	local tEventAttendees = tEventInfo.tCurrentAttendees
+	local tNotAttending = tEventInfo.tNotAttending
+	local tPlayerStatus = {["Name"] = GameLib.GetPlayerUnit():GetName(),["Status"] = "Declined", 
+							["Roles"] = self:GetSelectedRoles(0 ,0 ,0)}
+	local PlayerFound = false
+	SendVarToRover("DeclinedEventId", nEventID)
+	SendVarToRover("DeclinedEventInfo", tEvent.Detail)
+	SendVarToRover("DeclinedEventData",tEvent)
+	SendVarToRover("tEventsBacklog")
+  	if tEventsBacklog == {} or tEventsBacklog == nil then
+  		tEventsBacklog[nEventID] = {
+  			nEventSortValue = tEvent.nEventSortValue,
+			EventId = tEvent.EventId,
+			strEventStatus = tEvent.strEventStatus,
+			Detail  = {
+				Creator = tEvent.Detail.Creator,
+				--CreatorRoles = self:GetSelectedRoles(bCreatorTank,bCreatorHealer,bCreatorDPS),
+				tCurrentAttendees = PlayerStatus,	
+				EventModified = tEvent.Detail.EventModified,
+					
+			},
+		}
+	end 
+
+  	for key, Event in pairs(tEventsBacklog) do
+
+  	SendVarToRover("BacklogKey", key)
+  	SendVarToRover("BacklogValue", Event)
     if key == nEventID then
-      for idx, attendee in pairs (tEventInfo.tCurrentAttendees) do
-        if attendee.Name == GameLib.GetPlayerUnit():GetName() then
- 
-          Event.Detail.tCurrentAttendees[idx].Status = "Declined"
-          self.wndSelectedListItemDetail:Show(true)
-          PlayerFound = true
-          MsgTrigger = "EventDeclined"
-        end
-      end
- 
-      if not PlayerFound then
-        for idx2, player in pairs(tEventInfo.tCurrentAttendees) do
-          if player.Name == GameLib.GetPlayerUnit():GetName() and player.Status == "Declined" then
-            Print("You have already declined this event.")
-            return
-          else
-            Print("You have declined the event.")
-            tEventsBacklog[tEvent.EventId].Detail.tCurrentAttendees[idx2].Status = "Declined"
-            MsgTrigger = "not PlayerFound Decline" 
-            tEventInfo.EventModified = os.time()
-            wndControl:GetParent():FindChild("DeclineButton"):Show(false)  
-          end
-        end
-      end
-    end
-  end
+      	for idx, attendee in pairs (tEventsBacklog.tCurrentAttendees) do
+        	if attendee.Name == GameLib.GetPlayerUnit():GetName() then
+ 				SendVarToRover(attendee.Name)
+          		self.wndSelectedListItemDetail:Show(true)
+		        PlayerFound = true
+		        MsgTrigger = "Player's Declined Status already known by event creator."
+		        end
+		    end
+		 
+		    if not PlayerFound then
+		    	for idx2, player in pairs(tEventsBacklog.tCurrentAttendees) do
+		        	if player.Name == GameLib.GetPlayerUnit():GetName() and player.Status == "Declined" then
+		            	Print("You have already declined this event, but it has not been confirmed by the event owner.")
+		            	MsgTrigger = "Player's Status has not yet been confirmed by event owner."
+		            	return
+		          	else
+		            	Print("You have declined the event.")
+			            tEventsBacklog[key].Detail.tCurrentAttendees[idx2] = tPlayerStatus
+			            MsgTrigger = "New Declined Status for Player added to existing Backlog" 
+			            tEventInfo.EventModified = os.time()
+			            wndControl:GetParent():FindChild("DeclineButton"):Show(false)  
+		          	end
+		        end
+		    end
+		end
+	end
   self:PopulateItemList(tEvents)
   tMetaData.nLatestUpdate = os.time()
   
@@ -779,12 +814,13 @@ function EventManager:AddItem(i)
 	local SignUpButton = wnd:FindChild("SignUpButton")
 	local DeclineButton = wnd:FindChild("DeclineButton")
 	local strEventInfo = ""
+	local PlayerAttending = false
 	
 	-- keep track of the window item created
 	self.tItems[i] = wnd
 
 	-- Build text for display in list item
-	local tEvent = tEvents[i]
+	tEvent = tEvents[i]
 	local tEventInfo = tEvent.Detail
 	local tEventAttendees = tEventInfo.tCurrentAttendees
 	local tEventRoles = tEventInfo.tCurrentAttendees
@@ -793,25 +829,26 @@ function EventManager:AddItem(i)
 	tEventInfo.nCurrentHealers = 0
 	tEventInfo.nCurrentDPS = 0
 	for idx, name in pairs(tEventInfo.tCurrentAttendees) do
-		if tEventAttendees[idx].Name == GameLib.GetPlayerUnit():GetName() then
+		if tEventAttendees[idx].Name == GameLib.GetPlayerUnit():GetName() then 
+			if tEventAttendees[idx].Status == "Attending" then
 			PlayerAttending = true
+			elseif tEventAttendees[idx].Status == "Declined" then
+			PlayerAttending = false
+		end
+		else PlayerAttending = "unknown"
 		end
 	end
 	if PlayerAttending == true then 
 		SignUpButton:Show(false)
 		DeclineButton:Show(true)
+	elseif PlayerAttending == false then
+		SignUpButton:Show(true)
+		DeclineButton:Show(false)
 	else
-		for idx2, name in pairs(tEventInfo.tNotAttending) do
-			if tEventInfo.tNotAttending[idx2].Name == GameLib.GetPlayerUnit():GetName() then
-				SignUpButton:Show(true)
-				DeclineButton:Show(false)
-			else
-				SignUpButton:Show(true)
-				DeclineButton:Show(true)
-			end
-		end
+		SignUpButton:Show(true)
+		DeclineButton:Show(false)
 	end
-			
+
 	if not tEventAttendees then
 		tEventInfo.nEventAttendeeCount = 0 
 	else tEventInfo.nEventAttendeeCount = self:TableLength(tEventAttendees)
@@ -920,7 +957,7 @@ function EventManager:OnListItemSelected(wndHandler, wndControl)
 			self.wndSelectedListItemDetail:Show(false)
 		
 	end
-											
+	SendVarToRover("SelectedEventData",SelectedEvent)										
 end
 
 

@@ -272,9 +272,9 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 	else 
 		--for i = self:TableLength(tMsg.tEventsBacklog), 1, -1 do
 		--	Print(i)
-			for event, EventId in pairs(tMsgReceived.tEventsBacklog) do
+			for event, EventId in pairs(tMsg.tEventsBacklog) do
 				BacklogEvent = event
-				if not tMsgReceived.tEventsBacklog[event].Detail then
+				if not tMsg.tEventsBacklog[event].Detail then
 					--tMsg.tEventsBacklog[event] = nil
 					Print("Backlog Msg Detail empty")
 				
@@ -283,7 +283,7 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 					--tMsg.tEventsBacklog[i] = nil
 					Print("Backlog Msg processed")
 					
-					tBacklogRemaining = self:ProcessBacklog(tEventsBacklog[event])
+					tBacklogRemaining = self:ProcessBacklog(tEventsBacklog)
 
 				else
 					Print("Backlog for event not processed.  Event owned by "..EventId.Detail.Creator)

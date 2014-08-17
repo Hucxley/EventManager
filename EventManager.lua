@@ -207,6 +207,8 @@ function EventManager:OnDocLoaded()
 
 		if tEventsBacklog ~= nil then 
 			tEventsBacklog = tEventsBacklog
+		else 
+			tEventsBacklog = {}
 		end
 		
 		-- start add by Feyde
@@ -281,16 +283,19 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 					--tMsg.tEventsBacklog[i] = nil
 					Print("Backlog Msg processed")
 					
-					tBacklogRemaining = self:ProcessBacklog(EventId)
+					tBacklogRemaining = self:ProcessBacklog(tEventsBacklog[event])
 
 				else
 					Print("Backlog for event not processed.  Event owned by "..EventId.Detail.Creator)
 				end
 			end
 		
-		--end
+	end
 	tBackloggedEvents = tEventHolder
-	tEventsBacklog = tBacklogRemaining
+	if tBacklogRemaining ~= nil then
+		tEventsBacklog = tBacklogRemaining
+	else
+		tEventsBacklog = {}
 	end
 
 
@@ -1149,7 +1154,7 @@ function EventManager:ProcessBacklog(t)
 					if tKnownAttendees[idx].Name == GameLib.GetPlayerUnit():GetName() then
 							if tEvents.Detail.tCurrentAttendees[idx].Status ~= "Registered" then
 								tEvents.Detail.tCurrentAttendees[idx].Status = "Registered"
-								t.Detail.tCurrentAttendees[idx2] = nil
+								t.Detail.tCurrentAttendees[idx2] = {}
 							end
 					elseif tKnownAttendees[idx].Name == tPendingAttendees[idx2].Name then
 						if tPendingAttendees[idx2].Status ~= "Registered" then

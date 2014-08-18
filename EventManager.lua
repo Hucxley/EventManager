@@ -258,8 +258,8 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 	local MessageToSend = false
 	local ModifiedTime = 0
 	local count = count+1
-	SendVarToRover("MsgReceived",tMsgReceived)
-	SendVarToRover("MsgCount", count)
+	--SendVarToRover("MsgReceived",tMsgReceived)
+	--SendVarToRover("MsgCount", count)
 	if tMsg == nil then 
 		return 
 	end
@@ -334,10 +334,10 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 			
 	
 
-	SendVarToRover("tEvents",tEvents)
-	SendVarToRover("tMetaData",tMetaData)
-	SendVarToRover("UpdateComparison",tMetaData.nLatestUpdate - tMsg.tMetaData.nLatestUpdate)
-	SendVarToRover("MessageFlag", MessageToSend)
+	--SendVarToRover("tEvents",tEvents)
+	--SendVarToRover("tMetaData",tMetaData)
+	--SendVarToRover("UpdateComparison",tMetaData.nLatestUpdate - tMsg.tMetaData.nLatestUpdate)
+	--SendVarToRover("MessageFlag", MessageToSend)
 	self:PopulateItemList(tEvents)
 
 	if tMetaData.nLatestUpdate ~= tMsg.tMetaData.nLatestUpdate then
@@ -353,7 +353,7 @@ end
 
 function EventManager:EventsMessenger(strTrigger)
 	local MessengerTrigger = strTrigger
-	SendVarToRover("Message Trigger",MessengerTrigger)
+	--SendVarToRover("Message Trigger",MessengerTrigger)
 	tMetaData = tMetaData
    	local tEvents = tEvents
    	local tEventsBacklog = tEventsBacklog
@@ -556,7 +556,7 @@ end
 function EventManager:OnEventEditSubmit(wndHandler,wndControl,eMouseButton)
 	local EditedEvent = wndControl:GetParent():GetData()
 	local EditedId = EditedEvent.EventId
-	SendVarToRover("EditedEvent",EditedEvent)
+	--SendVarToRover("EditedEvent",EditedEvent)
 	local wndEdit = wndControl:GetParent()
 	if EditedEvent.EventId == tEvents[EditedId].EventId then
 			tEvents[EditedId].Detail = {
@@ -702,10 +702,10 @@ function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
 	local tPlayerStatus = {["Name"] = GameLib.GetPlayerUnit():GetName(),["Status"] = "Declined", 
 							["Roles"] = self:GetSelectedRoles(0 ,0 ,0)}
 	local PlayerFound = false
-	SendVarToRover("DeclinedEventId", nEventID)
-	SendVarToRover("DeclinedEventInfo", tEvent.Detail)
-	SendVarToRover("DeclinedEventData",tEvent)
-	SendVarToRover("tEventsBacklog")
+	--SendVarToRover("DeclinedEventId", nEventID)
+	--SendVarToRover("DeclinedEventInfo", tEvent.Detail)
+	--SendVarToRover("DeclinedEventData",tEvent)
+	--SendVarToRover("tEventsBacklog")
 	if tEventInfo.Creator == GameLib.GetPlayerUnit():GetName() then
 		for idx, player in pairs(tEvents[nEventID].Detail.tCurrentAttendees) do
 			Print(player.Name)
@@ -733,12 +733,12 @@ function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
 
   	for key, Event in pairs(tEventsBacklog) do
 
-  	SendVarToRover("BacklogKey", key)
-  	SendVarToRover("BacklogValue", Event)
+  	--SendVarToRover("BacklogKey", key)
+  	--SendVarToRover("BacklogValue", Event)
     if key == nEventID then
       	for idx, attendee in pairs (tEventsBacklog.tCurrentAttendees) do
         	if attendee.Name == GameLib.GetPlayerUnit():GetName() then
- 				SendVarToRover(attendee.Name)
+ 				--SendVarToRover(attendee.Name)
           		self.wndSelectedListItemDetail:Show(true)
 		        PlayerFound = true
 		        MsgTrigger = "Player's Declined Status already known by event creator."
@@ -990,7 +990,7 @@ function EventManager:OnListItemSelected(wndHandler, wndControl)
 			self.wndSelectedListItemDetail:Show(false)
 		
 	end
-	SendVarToRover("SelectedEventData",SelectedEvent)										
+	--SendVarToRover("SelectedEventData",SelectedEvent)										
 end
 
 

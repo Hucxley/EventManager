@@ -257,16 +257,21 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 	local BacklogEvent = {}
 	local MessageToSend = false
 	local ModifiedTime = 0
-	count = count+1
+	local count = count+1
 	SendVarToRover("MsgReceived",tMsgReceived)
 	SendVarToRover("MsgCount", count)
-	if tMsg == nil then return end
+	if tMsg == nil then 
+		return 
+	end
 	if tMetaData.SecurityRequired ~= nil and tMetaData.SecurityRequired == true then 
-		if not self:AuthSender(strSender) then return end
-		if tMsg.tMetaData.Passphrase ~= tMetaData.Passphrase then
-			return
+		if not self:AuthSender(strSender) then 
+			return 
 		end
 	end
+	if tMsg.tMetaData.Passphrase ~= tMetaData.Passphrase then
+		return
+	end
+	
 
 
 
@@ -280,8 +285,8 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 			
 				tEventsBacklog[event], MessageToSend, ModifiedTime = self:ProcessBacklog(BacklogEvent)
 				if ModifiedTime ~= nil and ModifiedTime > 0 then 
-					tEvents[event].Detail.EventModified = ModifiedTime
-					tEvents[event].Detail.tCurrentAttendees = self:TableLength(tEvents[event].Detail.tCurrentAttendees)
+					tEvents[event].Detail.EventModified = ModifiedTime 
+					tEvents[event].Detail.nEventAttendeeCount = self:TableLength(tEvents[event].Detail.tCurrentAttendees)
 					tMetaData.nLatestUpdate = ModifiedTime
 				end
 
@@ -301,15 +306,19 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 	for MsgKey, MsgEventId in pairs(tMsg.tEvents) do
 		DuplicateEvent = false
 		for key, EventId in pairs(tEvents) do
-			if tMsg.tEvents[MsgKey].EventId == tEvents[key].EventId then 
-				if tMsg.tEvents[MsgKey].Detail.EventModified <= tEvents[key].Detail.EventModified and EventId.tCurrentAttendees == tMsg.tEvents[MsgKey].Detail.tCurrentAttendees and 
-																event.tNotAttending == tMsg.tEvents[MsgKey].Detail.tNotAttending then
-					DuplicateEvent = true
-				
-				else
-					tEvents[key] = tMsg.tEvents[MsgKey]
-					tEvents[key].Detail.EventModified = os.time()
-					DuplicateEvent = true
+			if tMsg.tEvents[MsgKey].EventId == tEvents[key].EventId then
+				for idx, attendees in pairs(EventId.Detail.tCurrentAttendees) do
+				-- Compare MsgEvents with Local Events, if the same, move on.  If not, update existing event or add new event to live table
+					if 	tMsg.tEvents[MsgKey].Detail.EventModified <= EventId.Detail.EventModified and
+						tMsg.tEvents[MsgKey].Detail.nEventAtteneeCount == EventId.Detail.nEventAttendeeCount and
+						tMsg.tEvents[MsgKey].Detail.tCurrentAttendees[idx].Name == attendees.Name and
+						tMsg.tEvents[MsgKey].Detail.tCurrentAttendees[idx].Status == attendees.Status then
+						DuplicateEvent = true
+					else
+						tEvents[key] = tMsg.tEvents[MsgKey]
+						tEvents[key].Detail.EventModified = os.time()
+						DuplicateEvent = true
+					end
 				end
 			end	
 		end
@@ -451,7 +460,6 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 														 ,self.wndNewEvent:FindChild("DPSRoleButton"):IsChecked() )}},	
 			strRealm = GameLib.GetRealmName(),
 			EventModified = os.time(),
-			tNotAttending = {},
 			
 
 			
@@ -521,14 +529,22 @@ function EventManager:OnEditEventFormOn(wndHandler, wndControl, eMouseButton)
 	wnd:FindChild("EventMaxDPSBox"):SetText(SelectedEventData.Detail.MaxDps)
 	wnd:FindChild("EventDescriptionBox"):SetText(SelectedEventData.Detail.Description)
 
-	if SelectedEventData.Detail.bTankRole == true then
-		wnd:FindChild("TankRoleButton"):SetCheck(true)
-	end
-	if SelectedEventData.Detail.bHealerRole == true then
-		wnd:FindChild("HealerRoleButton"):SetCheck(true)
-	end
-	if SelectedEventData.Detail.bDPSRole == true then
-		wnd:FindChild("DPSRoleButton"):SetCheck(true)
+	for idx, player in pairs(tEvents[SelectedEventId].Detail.tCurrentAttendees) do
+		Print(player.Roles.Tank)
+		Print(player.Roles.Healer)
+		Print(player.Roles.DPS)
+		if player.Name == GameLib.GetPlayerUnit():GetName() then
+			if player.Roles.Tank == 1 then
+				wnd:FindChild("TankRoleButton"):SetCheck(true)
+			end
+			if player.Roles.Healer == 1 then
+				wnd:FindChild("HealerRoleButton"):SetCheck(true)
+			end
+			if player.Roles.DPS == 1 then
+				wnd:FindChild("DPSRoleButton"):SetCheck(true)
+			end
+		end
+		
 	end
 	
 	self.wndEditEvent:SetData(SelectedEventData)
@@ -539,11 +555,11 @@ end
 
 function EventManager:OnEventEditSubmit(wndHandler,wndControl,eMouseButton)
 	local EditedEvent = wndControl:GetParent():GetData()
+	local EditedId = EditedEvent.EventId
+	SendVarToRover("EditedEvent",EditedEvent)
 	local wndEdit = wndControl:GetParent()
-	--EditEvent = {}
-	for key, event in pairs(tEvents) do
-		if EditedEvent.EventId == event.EventId then
-			event.Detail = {
+	if EditedEvent.EventId == tEvents[EditedId].EventId then
+			tEvents[EditedId].Detail = {
 			EventName = wndEdit:FindChild("EventNameBox"):GetText(),
 			Month = tonumber(wndEdit:FindChild("EventMonthBox"):GetText()),
 			Day = tonumber(wndEdit:FindChild("EventDayBox"):GetText()),
@@ -551,43 +567,40 @@ function EventManager:OnEventEditSubmit(wndHandler,wndControl,eMouseButton)
 			Hour = tonumber(wndEdit:FindChild("EventHourBox"):GetText()),
 			Minute = tonumber(wndEdit:FindChild("EventMinuteBox"):GetText()),
 			AmPm = string.lower(wndEdit:FindChild("EventAmPmBox"):GetText()),
-			TimeZone = event.Detail.TimeZone,
+			TimeZone = EditedEvent.Detail.TimeZone,
 			MaxAttendees = tonumber(wndEdit:FindChild("EventMaxAttendeesBox"):GetText()),
 			MaxTanks = tonumber(wndEdit:FindChild("EventMaxTanksBox"):GetText()),
 			MaxHealers = tonumber(wndEdit:FindChild("EventMaxHealersBox"):GetText()),
 			MaxDps = tonumber(wndEdit:FindChild("EventMaxDPSBox"):GetText()),
 			Description = wndEdit:FindChild("EventDescriptionBox"):GetText(),
-			Creator = event.Detail.Creator,
+			Creator = EditedEvent.Detail.Creator,
 			bTankRole = wndEdit:FindChild("TankRoleButton"):IsChecked(),
 			bHealerRole = wndEdit:FindChild("HealerRoleButton"):IsChecked(),
 			bDPSRole = wndEdit:FindChild("DPSRoleButton"):IsChecked(),
-			tCurrentAttendees = event.Detail.tCurrentAttendees,	
-			strRealm = event.Detail.strRealm,
+			tCurrentAttendees = EditedEvent.Detail.tCurrentAttendees,	
+			strRealm = EditedEvent.Detail.strRealm,
 			EventModified = os.time(),
-			tNotAttending = event.Detail.tNotAttending,
-			
-			}
-			event.EventId = event.EventId
-			event.strEventStatus = event.strEventStatus
-			event.EventModified = os.time()
-			if event.Detail.Hour > 12 then 
-				event.Detail.Hour = event.Detail.Hour - 12
-				event.Detail.AmPm = "pm"
+			}		
+			tEvents[EditedId].EventId = EditedEvent.EventId
+			tEvents[EditedId].strEventStatus = EditedEvent.strEventStatus
+			tEvents[EditedId].EventModified = os.time()
+			if tEvents[EditedId].Detail.Hour > 12 then 
+				tEvents[EditedId].Detail.Hour = tEvents[EditedId].Detail.Hour - 12
+				tEvents[EditedId].Detail.AmPm = "pm"
 			end
-			event.nEventSortValue = self:CreateSortValue(event.Detail)
-			if event.nEventSortValue < os.time() then
+			tEvents[EditedId].nEventSortValue = self:CreateSortValue(tEvents[EditedId].Detail)
+			if tEvents[EditedId].nEventSortValue < os.time() then
 				Print("Event Manager error: Events cannot be edited to occur in the past.")
-				event = EditedEvent
+				tEvents[EditedId] = EditedEvent
 			end	
 			
-		end
-		for idx2, name in pairs (tEvents[key].Detail.tCurrentAttendees) do
-			if tEvents[key].Detail.tCurrentAttendees[idx2].Name == GameLib.GetPlayerUnit():GetName() then
-				tEvents[key].Detail.tCurrentAttendees[idx2].Roles = 	{self:GetSelectedRoles(wndEdit:FindChild("TankRoleButton"):IsChecked(),
-																			wndEdit:FindChild("HealerRoleButton"):IsChecked(),
-																			wndEdit:FindChild("DPSRoleButton"):IsChecked())}
+			for idx2, player in pairs (EditedEvent.Detail.tCurrentAttendees) do
+				if player.Name == GameLib.GetPlayerUnit():GetName() then
+					tEvents[EditedId].Detail.tCurrentAttendees[idx2].Roles = self:GetSelectedRoles(wndEdit:FindChild("TankRoleButton"):IsChecked(),
+																				wndEdit:FindChild("HealerRoleButton"):IsChecked(),
+																				wndEdit:FindChild("DPSRoleButton"):IsChecked())
+				end
 			end
-		end
     end
 	self.wndEditEvent:Show(false)
 	MsgTrigger = "Event Edited"
@@ -626,28 +639,40 @@ end
 function EventManager:OnSignUpSubmit(wndHandler, wndControl, eMouseButton)
 	local SelectedEvent = wndControl:GetParent():GetData()
 	local SelectedEventId = SelectedEvent.EventId
+	local SelectedEventDetail = SelectedEvent.Detail
 	local EventName = SelectedEvent.Detail.EventName
 	local bSignUpTank = self.wndSignUp:FindChild("TankRoleButton"):IsChecked()
 	local bSignUpHealer = self.wndSignUp:FindChild("HealerRoleButton"):IsChecked()
 	local bSignUpDPS = self.wndSignUp:FindChild("DPSRoleButton"):IsChecked()
 	local tNewAttendeeInfo = {["Name"] = GameLib.GetPlayerUnit():GetName(),["Status"] = "Attending", ["nSignUpTime"] = os.time(), 
 							["Roles"] = self:GetSelectedRoles(bSignUpTank ,bSignUpHealer ,bSignUpDPS )}
-	if tEventsBacklog == nil or tEventsBacklog == { } then
+	if SelectedEventDetail.Creator == GameLib.GetPlayerUnit():GetName() then
+		for idx, player in pairs(tEvents[SelectedEventId].Detail.tCurrentAttendees) do
+			Print(player.Name)
+			if player.Name == GameLib.GetPlayerUnit():GetName() then
+				tEvents[SelectedEventId].Detail.bSignUpTank = self.wndSignUp:FindChild("TankRoleButton"):IsChecked()
+				tEvents[SelectedEventId].Detail.bSignUpHealer = self.wndSignUp:FindChild("HealerRoleButton"):IsChecked()
+				tEvents[SelectedEventId].Detail.bSignUpHealer = self.wndSignUp:FindChild("DPSRoleButton"):IsChecked()
+				tEvents[SelectedEventId].Detail.tCurrentAttendees[idx] = tNewAttendeeInfo
+				tEvents[SelectedEventId].Detail.EventModified = os.time()
+			end
+		end
+  	elseif tEventsBacklog == nil or tEventsBacklog == { } then
 		tEventsBacklog[SelectedEventId] = {
   		nEventSortValue = SelectedEvent.nEventSortValue,
-			EventId = SelectedEvent.EventId,
-			strEventStatus = SelectedEvent.strEventStatus,
-			Detail  = {
-				Creator = tEvent.Detail.Creator,
-				--CreatorRoles = self:GetSelectedRoles(bCreatorTank,bCreatorHealer,bCreatorDPS),
-				tCurrentAttendees = NewAttendeeInfo,	
-				EventModified = SelectedEvent.Detail.EventModified,
-					
-			},}
-			MsgTrigger = "New attendee created new backlog for this event."
+		EventId = SelectedEvent.EventId,
+		strEventStatus = SelectedEvent.strEventStatus,
+		Detail  = {
+			Creator = tEvent.Detail.Creator,
+			--CreatorRoles = self:GetSelectedRoles(bCreatorTank,bCreatorHealer,bCreatorDPS),
+			tCurrentAttendees = tNewAttendeeInfo,	
+			EventModified = SelectedEvent.Detail.EventModified,
+				
+		},}
+		MsgTrigger = "New attendee created new backlog for this event."
 	else
+	
 		for key, EventId in pairs(tEventsBacklog) do
-			local CurrentAttendees = EventId.Detail.tCurrentAttendees
 			if tEventsBacklog[key].EventId == SelectedEventId then
 				tEventsBacklog[key].Detail.CurrentAttendees = tNewAttendeeInfo
 				tEventsBacklog[key].Detail.EventModified = os.time()
@@ -681,7 +706,16 @@ function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
 	SendVarToRover("DeclinedEventInfo", tEvent.Detail)
 	SendVarToRover("DeclinedEventData",tEvent)
 	SendVarToRover("tEventsBacklog")
-  	if tEventsBacklog == {} or tEventsBacklog == nil then
+	if tEventInfo.Creator == GameLib.GetPlayerUnit():GetName() then
+		for idx, player in pairs(tEvents[nEventID].Detail.tCurrentAttendees) do
+			Print(player.Name)
+			if player.Name == GameLib.GetPlayerUnit():GetName() then
+				tEvents[nEventID].Detail.tCurrentAttendees[idx] = tPlayerStatus
+				tEvents[nEventID].Detail.EventModified = os.time()
+			end
+		end
+  	else
+  		if tEventsBacklog == {} or tEventsBacklog == nil then
   		tEventsBacklog[nEventID] = {
   			nEventSortValue = tEvent.nEventSortValue,
 			EventId = tEvent.EventId,
@@ -694,6 +728,7 @@ function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
 					
 			},
 		}
+		end
 	end 
 
   	for key, Event in pairs(tEventsBacklog) do
@@ -931,9 +966,7 @@ function EventManager:OnListItemSelected(wndHandler, wndControl)
 					..selectedItemText.tCurrentAttendees[key].Roles.Tank.."/"..selectedItemText.tCurrentAttendees[key].Roles.Healer.."/"
 					..selectedItemText.tCurrentAttendees[key].Roles.DPS..")"}
 	end
-	for key, name in pairs(selectedItemText.tNotAttending) do
-		tNotAttendingSelectedItem = {Name = selectedItemText.tNotAttending[key].Name}
-	end
+
 	for key, event in pairs(tEvents) do
 		if SelectedEvent.Detail.Creator == event.Detail.Creator then --GameLib.GetPlayerUnit():GetName() then
 			self.wndSelectedListItemDetail:FindChild("EditEventButton"):Show(true)
@@ -1122,7 +1155,7 @@ end
 function EventManager:TableLength(T)
 	local count = 0
 	for k, v in pairs(T) do 
-		if v then 
+		if v.Status == "Attending" then 
 			count = count + 1 
 		end
 	end

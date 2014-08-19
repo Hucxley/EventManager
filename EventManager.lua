@@ -1290,27 +1290,41 @@ function EventManager:ProcessBacklog(t)
 	local EventChanged = 0
 	SendVarToRover("Event to process", tReceived)
 
-	for pendingevent,PendingEventId in pairs(t) do
+	for pendingevent,PendingEventId in pairs(tReceived) do
 		SendVarToRover("PendingEvent(key)",pendingevent)
 		SendVarToRover("PendingEventID(value)", PendingEventId)
 		tPendingAttendees = PendingEventId.Detail.tCurrentAttendees
+		SendVarToRover("tPendingAttendees", tPendingAttendees)
 	
 		for event, EventId in pairs(tEvents) do
+			SendVarToRover("Received Event(key)",event)
+			SendVarToRover("Received Event (value)", EventId )
 			tKnownAttendees = EventId.Detail.tCurrentAttendees
+			SendVarToRover("tKnownAttendees", tKnownAttendees)
 			if event == pendingevent then
 				for idx, PendingPlayer in pairs(tPendingAttendees) do
+				SendVarToRover("PendingPlayer",PendingPlayer)
 				local NewAttendee = false
 					for idx2, name in pairs(tKnownAttendees) do
 
 						if tKnownAttendees[idx2].Name == GameLib.GetPlayerUnit():GetName() and tKnownAttendees[idx2].Status == tPendingAttendees[idx].Status then
-							Print("Your status ("..tKnownAttendees[idx2].Status..") for the event "..EventId.Detail.EventName.." has been confirmed.")
+							Print("Your status ("..tKnownAttendees[idx2].Status..") for the event "..EventId.Detail.EventName.." was already confirmed.")
 							t = {}
 							NewMessages = true
 							MsgTrigger = "Processed Player Removed Status From Pending"
 							return t, NewMessages, EventChanged
+
+						-- check if the owner is aware of their own status		
+						elseif tKnownAttendees[idx2].Name == GameLib.GetPlayerUn():GetName() and tknownAttendees[idx2].Name == tPendingAttendees[idx].Name and tKnownAttendees[idx2].Status ~= tPendingAttendees[idx].Status then
+							tEvents[event].Detail.tCurrentAttendees.Status = tPendingAttendees[idx].Status`
+							t = {}
+							NewMessages = true
+							MsgTrigger = "Processed new status for event owner."
+							return t, NewMessages, EventChanged
+						end
 						
 
-						-- Check if event owner already has a record of the player's status for the event.
+						-- Check if event owner already has a record of the player's status for the event, but the other player has not committed it yet.
 						elseif tKnownAttendees[idx2].Name == tPendingAttendees[idx].Name and tKnownAttendees[idx].Status == tPendingAttendees[idx].Status then 
 							return PendingEventId, NewMessages, EventChanged
 						
@@ -1354,6 +1368,7 @@ function EventManager:ProcessMyEvents(t)
 	local tPendingAttendees
 	local tKnownAttendees
 	local EventChanged = 0
+	local NewAttendee = false
 
 	for pendingevent,PendingEventId in pairs(t) do
 		SendVarToRover("PendingEvent(key)",pendingevent)
@@ -1364,16 +1379,17 @@ function EventManager:ProcessMyEvents(t)
 				tKnownAttendees = EventId.Detail.tCurrentAttendees
 			if event == pendingevent then
 				for idx, PendingPlayer in pairs(tPendingAttendees) do
-				local NewAttendee = false
+					NewAttendee = false
 					for idx2, name in pairs(tKnownAttendees) do
-
 					-- Check if event owner has an accurate record of player's status for the event, dump if so.
 						if tKnownAttendees[idx2].Name == GameLib.GetPlayerUnit():GetName() and tKnownAttendees[idx2].Status == tPendingAttendees[idx].Status then
 							Print("Your status ("..tKnownAttendees[idx2].Status..") for the event "..EventId.Detail.EventName.." has been confirmed.")
 							t = {}
 							NewMessages = true
 							MsgTrigger = "Processed Player Removed Status From Pending"
-						return t, NewMessages, EventChanged
+							return t, NewMessages, EventChanged
+						else 
+							If tKnownAttendees[idx2].Name ~ == GA
 						end
 					end
 				end

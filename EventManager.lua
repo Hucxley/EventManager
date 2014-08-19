@@ -322,7 +322,7 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 				end
 				SendVarToRover("PostProcessedBacklogEvent",PostProcessedEvent)
 			else
-				tEventsBAcklog[event], MessageToSend, ModifiedTime = self:ProcessMyEvents(BacklogEvent)
+				tEventsBacklog[event], MessageToSend, ModifiedTime = self:ProcessMyEvents(BacklogEvent)
 				if tEventsBacklog[event] == {} then
 					tEventsBacklog[event] = nil
 				end
@@ -747,66 +747,51 @@ function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
 	local tEventInfo = tEvent.Detail
 	local tEventAttendees = tEventInfo.tCurrentAttendees
 	local tNotAttending = tEventInfo.tNotAttending
-	local tPlayerStatus = {Name = GameLib.GetPlayerUnit():GetName(),Status = "Declined", 
-							Roles = self:GetSelectedRoles(0 ,0 ,0)}
-	local PlayerFound = false
+	local tPlayerStatus = {{Name = GameLib.GetPlayerUnit():GetName(),Status = "Declined", 
+							Roles = self:GetSelectedRoles(0 ,0 ,0)}}
 	SendVarToRover("DeclinedEventId", nEventID)
 	SendVarToRover("DeclinedEventInfo", tEvent.Detail)
 	SendVarToRover("DeclinedEventData",tEvent)
 	SendVarToRover("tEventsBacklog")
-	if tEventInfo.Creator == GameLib.GetPlayerUnit():GetName() then
+	--[[if tEventInfo.Creator == GameLib.GetPlayerUnit():GetName() then
 		for idx, player in pairs(tEvents[nEventID].Detail.tCurrentAttendees) do
 			if player.Name == GameLib.GetPlayerUnit():GetName() then
 				tEvents[nEventID].Detail.tCurrentAttendees[idx] = tPlayerStatus
 			end
 		end
-  	else
-  		if tEventsBacklog == {} or tEventsBacklog == nil then
-  		tEventsBacklog[nEventID] = {
-  			nEventSortValue = tEvent.nEventSortValue,
+  	else]]--
+  	if tEventsBacklog[nEventID] == {} or tEventsBacklog[nEventID] == nil then
+		tEventsBacklog[nEventID] = {
+			nEventSortValue = tEvent.nEventSortValue,
 			EventId = tEvent.EventId,
 			strEventStatus = tEvent.strEventStatus,
 			EventSyncChannel = tEvent.EventSyncChannel,
 			Detail  = {
 				Creator = tEvent.Detail.Creator,
-				--CreatorRoles = self:GetSelectedRoles(bCreatorTank,bCreatorHealer,bCreatorDPS),
+			--CreatorRoles = self:GetSelectedRoles(bCreatorTank,bCreatorHealer,bCreatorDPS),
 				tCurrentAttendees = tPlayerStatus,	
-								
-			},
-		}
-		end
-	end 
-
-  	for key, Event in pairs(tEventsBacklog) do
-
-  	SendVarToRover("BacklogKey", key)
-  	SendVarToRover("BacklogValue", Event)
-    if key == nEventID then
-      	for idx, attendee in pairs (tEventsBacklog.tCurrentAttendees) do
-        	if attendee.Name == GameLib.GetPlayerUnit():GetName() then
- 				SendVarToRover("Attendee Name", attendee.Name)
-          		--self.wndSelectedListItemDetail:Show(true)
-		        PlayerFound = true
-		        MsgTrigger = "Player's Declined Status already known by event creator."
-		        end
-		    end
-		 
-		    if not PlayerFound then
-		    	for idx2, player in pairs(tEventsBacklog.tCurrentAttendees) do
-		        	if player.Name == GameLib.GetPlayerUnit():GetName() and player.Status == "Declined" then
-		            	Print("You have already declined this event, but it has not been confirmed by the event owner.")
-		            	MsgTrigger = "Player's Status has not yet been confirmed by event owner."
-		            	return
-		          	else
-		            	Print("You have declined the event.")
-			            tEventsBacklog[key].Detail.tCurrentAttendees[idx2] = tPlayerStatus
-			            MsgTrigger = "New Declined Status for Player added to existing Backlog" 
-			            wndControl:GetParent():FindChild("DeclineButton"):Show(false)  
-		          	end
+							
+		},
+	}
+	else 
+	  	for key, Event in pairs(tEventsBacklog) do
+		  	SendVarToRover("BacklogKey", key)
+		  	SendVarToRover("BacklogValue", Event)
+			for idx2, player in pairs(tEventsBacklog[nEventID].Detail.tCurrentAttendees) do
+		    	if player.Name == GameLib.GetPlayerUnit():GetName() and player.Status == "Declined" then
+		        	Print("You have already declined this event, but it has not been confirmed by the event owner.")
+		        	MsgTrigger = "Player's Status has not yet been confirmed by event owner."
+		        	return
+		      	else
+		        	Print("You have declined the event.")
+		            tEventsBacklog[nEventID].Detail.tCurrentAttendees[idx2] = tPlayerStatus
+		            MsgTrigger = "New Declined Status for Player added to existing Backlog" 
+		            wndControl:GetParent():FindChild("DeclineButton"):Show(false)
 		        end
 		    end
 		end
 	end
+
   self:PopulateItemList(tEvents)
 
   
@@ -910,12 +895,23 @@ function EventManager:AddItem(i)
 	tEventInfo.nCurrentDPS = 0
 	for idx, name in pairs(tEventInfo.tCurrentAttendees) do
 		if tEventAttendees[idx].Name == GameLib.GetPlayerUnit():GetName() then 
-			if tEventAttendees[idx].Status == "Attending" then
-			PlayerAttending = true
-			elseif tEventAttendees[idx].Status == "Declined" then
-			PlayerAttending = false
-		end
-		else PlayerAttending = "unknown"
+
+			if tEventAttendees[idx].Status == "Attending" or tEventInfo.tCurrentAttendees[idx].Status == "Attending" then
+				PlayerAttending = true
+				if tEventInfo.tCurrentAttendees[idx].Roles.Tank == 1 then 
+					tEventInfo.nCurrentTanks = tEventInfo.nCurrentTanks + 1
+				end
+				if tEventInfo.tCurrentAttendees[idx].Roles.Healer == 1 then
+					tEventInfo.nCurrentHealers = tEventInfo.nCurrentHealers + 1
+				end
+				if tEventInfo.tCurrentAttendees[idx].Roles.DPS == 1 then 
+					tEventInfo.nCurrentDPS = tEventInfo.nCurrentDPS + 1
+				end
+			elseif tEventAttendees[idx].Status == "Declined" or tEventInfo.tCurrentAttendees[idx].Status == "Declined" then
+				PlayerAttending = false
+			else PlayerAttending = "unknown"
+			end
+		else
 		end
 	end
 	if PlayerAttending == true then 
@@ -1306,13 +1302,22 @@ function EventManager:ProcessBacklog(t)
 				local NewAttendee = false
 					for idx2, name in pairs(tKnownAttendees) do
 
+						if tKnownAttendees[idx2].Name == GameLib.GetPlayerUnit():GetName() and tKnownAttendees[idx2].Status == tPendingAttendees[idx].Status then
+							Print("Your status ("..tKnownAttendees[idx2].Status..") for the event "..EventId.Detail.EventName.." has been confirmed.")
+							t = {}
+							NewMessages = true
+							MsgTrigger = "Processed Player Removed Status From Pending"
+							return t, NewMessages, EventChanged
+						
+
 						-- Check if event owner already has a record of the player's status for the event.
-						if tKnownAttendees[idx2].Name == tPendingAttendees[idx].Name and tKnownAttendees[idx].Status == tPendingAttendees[idx].Status then 
+						elseif tKnownAttendees[idx2].Name == tPendingAttendees[idx].Name and tKnownAttendees[idx].Status == tPendingAttendees[idx].Status then 
 							return PendingEventId, NewMessages, EventChanged
+						
 
 						-- Correct the record if the player has changed their status.
 						elseif tKnownAttendees[idx2].Name == tPendingAttendees[idx].Name and tKnownAttendees[idx2].Status ~= tPendingAttendees[idx].Status then
-							tEvents[event].Detail.tCurrentAttendees[idx2] = tPendingAttendees[idx]
+							tEvents[EventId.EventId].Detail.tCurrentAttendees[idx2].Status = tPendingAttendees[idx].Status
 							NewMessages = true
 							EventChanged = os.time()
 							MsgTrigger = "Processed New Player Status"

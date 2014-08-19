@@ -117,6 +117,7 @@ function EventManager:OnRestore(eLevel,tSavedData)
 		end	
 		if tSavedData.tEventsBacklog ~= nil then
 			tEventsBacklog = tSavedData.tEventsBacklog
+			SendVarToRover("tEventsBacklog",tEventsBacklog)
 		end
 
 		if tSavedData.MajorVersionRewrite ~= nil then
@@ -259,9 +260,10 @@ function EventManager:OnEventManagerOn()
 		end
 	end
 
-
+	self:EventsMessenger()
 	-- populate the item list
-	self:PopulateItemList(tEvents)
+	
+	--self:PopulateItemList(tEvents)
 	
 	-- start add by Feyde
 	-- populate the security list
@@ -272,7 +274,7 @@ end
 function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed by Feyde.
 	local MyEvents = {}
 	local DuplicateEvent = false
-	tMsgReceived = tMsg
+	local tMsgReceived = tMsg
 	local BacklogEvent = {}
 	local MessageToSend = false
 	local ModifiedTime = 0
@@ -297,34 +299,32 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 	end
 	
 
-
-
 	if tMsg.tEventsBacklog == nil or tMsg.tEventsBacklog == {} then
+		tMsg.tEventsBacklog = nil
 	else 
-		for event, PendingEventId in pairs(tMsg.tEventsBacklog) do
+		for PendingEventId, PendingEvent in pairs(tMsg.tEventsBacklog) do
 		SendVarToRover("PendingBacklogEvent", BacklogEvent)
-		SendVarToRover("tMsgBacklogkey", event)
-		SendVarToRover("tMsgBacklogvalue", PendingEventId)
-			BacklogEvent[event] = PendingEventId
-			if not tMsg.tEventsBacklog[event].Detail then
-				tEventsBacklog[event] = nil
+		SendVarToRover("tMsgBacklogkey", PendingEventId)
+		SendVarToRover("tMsgBacklogvalue", PendingEvent)
+			BacklogEvent[PendingEventId] = PendingEvent
+			if not tMsg.tEventsBacklog[PendingEventId].Detail then
+				tEventsBacklog[PendingEventId] = nil
 				MessageToSend = true
-			elseif PendingEventId.Detail.Creator == GameLib.GetPlayerUnit():GetName() then
+				MsgTrigger = "tMsg.tEventsBacklog was empty"
+			elseif PendingEvent.Detail.Creator == GameLib.GetPlayerUnit():GetName() then
 			
-				tEventsBacklog[event], MessageToSend, ModifiedTime = self:ProcessBacklog(BacklogEvent)
-				local PostProcessedEvent = tEventsBacklog[event]
-				if tEventsBacklog[event] == {} then 
-					tEventsBacklog[event] = nil  
+				tEventsBacklog[PendingEventId], MessageToSend, ModifiedTime = self:ProcessBacklog(BacklogEvent)
+				local PostProcessedEvent = tEventsBacklog[PendingEventId]
+				if tEventsBacklog[PendingEventId] == {} then 
 				end
 				if ModifiedTime ~= nil and ModifiedTime > 0 then 
-					tEvents[event].Detail.EventModified = ModifiedTime 
-					tEvents[event].Detail.nEventAttendeeCount = self:TableLength(tEvents[event].Detail.tCurrentAttendees)
+					tEvents[PendingEventId].Detail.EventModified = ModifiedTime 
+					tEvents[PendingEventId].Detail.nEventAttendeeCount = self:TableLength(tEvents[event].Detail.tCurrentAttendees)
 				end
 				SendVarToRover("PostProcessedBacklogEvent",PostProcessedEvent)
 			else
-				tEventsBacklog[event], MessageToSend, ModifiedTime = self:ProcessMyEvents(BacklogEvent)
-				if tEventsBacklog[event] == {} then
-					tEventsBacklog[event] = nil
+				tEventsBacklog[PendingEventId], MessageToSend, ModifiedTime = self:ProcessMyEvents(BacklogEvent)
+				if tEventsBacklog[PendingEventId] == {} then
 				end
 			end
 		end
@@ -370,7 +370,6 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 	SendVarToRover("tMetaData",tMetaData)
 	SendVarToRover("UpdateComparison",tMetaData.nLatestUpdate - tMsg.tMetaData.nLatestUpdate)
 	SendVarToRover("MessageFlag", MessageToSend)
-	self:PopulateItemList(tEvents)
 	Print(tostring(tMetaData.nLatestUpdate > tMsg.tMetaData.nLatestUpdate))
 	if tMetaData.nLatestUpdate > tMsg.tMetaData.nLatestUpdate then
 		MsgTrigger = "tMetaUpdate > tMsgMetaUpdate"
@@ -382,6 +381,8 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 	end
 	--Print("Incoming Message Processing Complete")
 	tMetaData.nLatestUpdate = os.time()
+	self:PopulateItemList(tEvents)
+	
 end
 
 function EventManager:EventsMessenger(strTrigger)
@@ -395,6 +396,7 @@ function EventManager:EventsMessenger(strTrigger)
     -- prepare our message to send to other users
     local t = {}
     SendVarToRover("Message to Send", t)
+    SendVarToRover("EventsChan",EventsChan)
     t.tMetaData = tMetaData
     t.tEvents = tEvents
     t.tEventsBacklog = tEventsBacklog
@@ -501,10 +503,7 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 														 ,self.wndNewEvent:FindChild("DPSRoleButton"):IsChecked() )}},	
 			strRealm = GameLib.GetRealmName(),
 			EventModified = os.time(),
-
-			
-
-			
+			ApplicationsProcessed = {}
 		},
 		
 	}
@@ -528,17 +527,19 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 
 		for NewEventId, NewEvent in pairs(NewEventEntry) do
 			
-			tEventsBacklog[NewEventEntry.EventId] = {		
+			tEventsBacklog[GameLib.GetRealmName()..GameLib.GetPlayerUnit():GetName()..os.time()] = {		
 			nEventSortValue = NewEventEntry.nEventSortValue,
 			EventId = NewEventEntry.EventId,
 			strEventStatus = NewEventEntry.strEventStatus,
 			EventSyncChannel = NewEventEntry.EventSyncChannel,
+			ApplicationCreator = GameLib.GetPlayerUnit():GetName(),
 			Detail  = {
 				Creator = NewEventEntry.Detail.Creator,
 				--CreatorRoles = self:GetSelectedRoles(bCreatorTank,bCreatorHealer,bCreatorDPS),
 				tCurrentAttendees = NewEventEntry.Detail.tCurrentAttendees,	
 				EventModified = NewEventEntry.Detail.EventModified,
-				tNotAttending = NewEventEntry.Detail.tNotAttending	
+				tNotAttending = NewEventEntry.Detail.tNotAttending,
+				nSignUpTime = os.time(),	
 			},}
 			SendVarToRover("NewEventBacklogkey", NewEventEntry.EventId)
 			SendVarToRover("NewEventBacklogvalue", NewEvent)
@@ -747,12 +748,13 @@ function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
 	local tEventInfo = tEvent.Detail
 	local tEventAttendees = tEventInfo.tCurrentAttendees
 	local tNotAttending = tEventInfo.tNotAttending
-	local tPlayerStatus = {{Name = GameLib.GetPlayerUnit():GetName(),Status = "Declined", 
-							Roles = self:GetSelectedRoles(0 ,0 ,0)}}
+	local strPlayerName = GameLib.GetPlayerUnit():GetName()
+	local strPlayerStatus = "Declined" 
+	local tPlayerRoles  = self:GetSelectedRoles(0 ,0 ,0)
 	SendVarToRover("DeclinedEventId", nEventID)
 	SendVarToRover("DeclinedEventInfo", tEvent.Detail)
 	SendVarToRover("DeclinedEventData",tEvent)
-	SendVarToRover("tEventsBacklog")
+	SendVarToRover("tEventsBacklog",tEventsBacklog)
 	--[[if tEventInfo.Creator == GameLib.GetPlayerUnit():GetName() then
 		for idx, player in pairs(tEvents[nEventID].Detail.tCurrentAttendees) do
 			if player.Name == GameLib.GetPlayerUnit():GetName() then
@@ -768,11 +770,10 @@ function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
 			EventSyncChannel = tEvent.EventSyncChannel,
 			Detail  = {
 				Creator = tEvent.Detail.Creator,
-			--CreatorRoles = self:GetSelectedRoles(bCreatorTank,bCreatorHealer,bCreatorDPS),
-				tCurrentAttendees = tPlayerStatus,	
-							
-		},
-	}
+				tCurrentAttendees = {Name = strPlayerName, Status = strPlayerStatus, Roles = tPlayerRoles},			
+			},
+		}
+		MsgTrigger = "New Backlog Created for "..tEventsBacklog[nEventID].EventId
 	else 
 	  	for key, Event in pairs(tEventsBacklog) do
 		  	SendVarToRover("BacklogKey", key)
@@ -786,7 +787,7 @@ function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
 		        	Print("You have declined the event.")
 		            tEventsBacklog[nEventID].Detail.tCurrentAttendees[idx2] = tPlayerStatus
 		            MsgTrigger = "New Declined Status for Player added to existing Backlog" 
-		            wndControl:GetParent():FindChild("DeclineButton"):Show(false)
+		            
 		        end
 		    end
 		end
@@ -794,7 +795,6 @@ function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
 
   self:PopulateItemList(tEvents)
 
-  
   self:EventsMessenger(MsgTrigger)
 end
 
@@ -893,6 +893,7 @@ function EventManager:AddItem(i)
 	tEventInfo.nCurrentTanks = 0
 	tEventInfo.nCurrentHealers = 0
 	tEventInfo.nCurrentDPS = 0
+	SendVarToRover("Populated Items", tEvent)
 	for idx, name in pairs(tEventInfo.tCurrentAttendees) do
 		if tEventAttendees[idx].Name == GameLib.GetPlayerUnit():GetName() then 
 
@@ -914,16 +915,7 @@ function EventManager:AddItem(i)
 		else
 		end
 	end
-	if PlayerAttending == true then 
-		SignUpButton:Show(false)
-		DeclineButton:Show(true)
-	elseif PlayerAttending == false then
-		SignUpButton:Show(true)
-		DeclineButton:Show(false)
-	else
-		SignUpButton:Show(true)
-		DeclineButton:Show(true)
-	end
+	
 
 	if not tEventAttendees then
 		tEventInfo.nEventAttendeeCount = 0 
@@ -960,8 +952,28 @@ function EventManager:AddItem(i)
 	for key, name in pairs(tEventInfo.tCurrentAttendees) do
 		AttendeeList = {tEventInfo.tCurrentAttendees[key].Name}
 	end
-	wnd:SetTooltip(table.concat(AttendeeList, '\n'))
 	wnd:SetData(tEvent)
+	if tEventsBacklog == nil or {} then
+	else
+		for idx, attendee in pairs(tEventsBacklog[tEvent.EventId].Detail.tCurrentAttendees) do
+			if attendee.Name == GameLib.GetPlayerUnit():GetName() and attendee.Status == "Declined" then
+				PlayerAttending = false
+			end
+		end
+	end
+
+	if PlayerAttending == true then 
+		SignUpButton:Show(false)
+		DeclineButton:Show(true)
+	elseif PlayerAttending == false then
+		SignUpButton:Show(true)
+		DeclineButton:Show(false)
+	else
+		SignUpButton:Show(true)
+		DeclineButton:Show(true)
+	end
+	wnd:SetTooltip(table.concat(AttendeeList, '\n'))
+	
 end
 
 -- when a list item is selected
@@ -1290,10 +1302,10 @@ function EventManager:ProcessBacklog(t)
 	local EventChanged = 0
 	SendVarToRover("Event to process", tReceived)
 
-	for pendingevent,PendingEventId in pairs(tReceived) do
-		SendVarToRover("PendingEvent(key)",pendingevent)
-		SendVarToRover("PendingEventID(value)", PendingEventId)
-		tPendingAttendees = PendingEventId.Detail.tCurrentAttendees
+	for PendingId,PendingEvent in pairs(tReceived) do
+		SendVarToRover("PendingEvent(key)",PendingId)
+		SendVarToRover("PendingEventID(value)", PendingEvent)
+		tPendingAttendees = PendingEvent.Detail.tCurrentAttendees
 		SendVarToRover("tPendingAttendees", tPendingAttendees)
 	
 		for event, EventId in pairs(tEvents) do
@@ -1315,8 +1327,8 @@ function EventManager:ProcessBacklog(t)
 							return t, NewMessages, EventChanged
 
 						-- check if the owner is aware of their own status		
-						elseif tKnownAttendees[idx2].Name == GameLib.GetPlayerUn():GetName() and tknownAttendees[idx2].Name == tPendingAttendees[idx].Name and tKnownAttendees[idx2].Status ~= tPendingAttendees[idx].Status then
-							tEvents[event].Detail.tCurrentAttendees.Status = tPendingAttendees[idx].Status`
+						elseif tKnownAttendees[idx2].Name == GameLib.GetPlayerUnit():GetName() and tKnownAttendees[idx2].Name == tPendingAttendees[idx].Name and tKnownAttendees[idx2].Status ~= tPendingAttendees[idx].Status then
+							tEvents[event].Detail.tCurrentAttendees.Status = tPendingAttendees[idx].Status
 							t = {}
 							NewMessages = true
 							MsgTrigger = "Processed new status for event owner."
@@ -1325,8 +1337,8 @@ function EventManager:ProcessBacklog(t)
 						
 
 						-- Check if event owner already has a record of the player's status for the event, but the other player has not committed it yet.
-						elseif tKnownAttendees[idx2].Name == tPendingAttendees[idx].Name and tKnownAttendees[idx].Status == tPendingAttendees[idx].Status then 
-							return PendingEventId, NewMessages, EventChanged
+						if tKnownAttendees[idx2].Name == tPendingAttendees[idx].Name and tKnownAttendees[idx].Status == tPendingAttendees[idx].Status then 
+							return PendingEvent, NewMessages, EventChanged
 						
 
 						-- Correct the record if the player has changed their status.
@@ -1335,10 +1347,10 @@ function EventManager:ProcessBacklog(t)
 							NewMessages = true
 							EventChanged = os.time()
 							MsgTrigger = "Processed New Player Status"
-							return PendingEventId, NewMessages, EventChanged								
+							return PendingEvent, NewMessages, EventChanged								
 								
 						-- Event Owner creates a record of a new attendee's status in the event's attendees list and updates the pending table.
-						elseif tKnownAttendees[idx2].Name ~= tPendingAttendees[idx].Name then --and tPendingAttendees[idx2].Status ~= "Registered" then
+						elseif tKnownAttendees[idx2].Name ~= tPendingAttendees[idx].Name then 
 							NewAttendee = true
 																
 						else
@@ -1348,12 +1360,12 @@ function EventManager:ProcessBacklog(t)
 					
 					-- Append New Attendee info to event
 					if NewAttendee == true then 
-						table.insert(tEvents[event].Detail.tCurrentAttendees, PendingEventId.Detail.tCurrentAttendees[idx])
+						table.insert(tEvents[event].Detail.tCurrentAttendees, PendingEvent.Detail.tCurrentAttendees[idx])
 						Print("Player "..tPendingAttendees[idx].Name.." has been confirmed as ".. tPendingAttendees[idx].Status.. " for "..EventId.Detail.EventName..".")
 						NewMessages = true
 						EventChanged = os.time()
 						MsgTrigger = "Processed New Event Attendee"
-						return PendingEventId, NewMessages, EventChanged
+						return PendingEvent, NewMessages, EventChanged
 					end
 				end
 			end
@@ -1389,15 +1401,15 @@ function EventManager:ProcessMyEvents(t)
 							MsgTrigger = "Processed Player Removed Status From Pending"
 							return t, NewMessages, EventChanged
 						else 
-							If tKnownAttendees[idx2].Name ~ == GA
+							if tKnownAttendees[idx2].Name == GameLib.GetPlayerUnit():GetName() and tKnownAttendees[idx2].Status ~= tPendingAttendees[idx].Status then
+								return pendingEventId, NewMessages, EventChanged
+							end
 						end
 					end
 				end
 			end
 		end
 	end
-
-
 end
 
 function EventManager:OnMajorVersionConfirmation(wndHandler,wndControl,eMouseButton)

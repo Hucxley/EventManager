@@ -1063,8 +1063,6 @@ function EventManager:OnListItemSelected(wndHandler, wndControl)
 		for idx, player in pairs(SelectedEvent.Detail.tCurrentAttendees) do
 			if player.Name == GameLib.GetPlayerUnit():GetName() and player.Status == "Attending" then --GameLib.GetPlayerUnit():GetName() then
 				ShowSignUpButton = false
-				Print(tostring(ShowSignUpButton))
-				break
 			end
 		end
 		if ShowSignUpButton == false then

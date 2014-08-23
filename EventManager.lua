@@ -276,142 +276,141 @@ function EventManager:OnEventManagerOn()
 end
 
 function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed by Feyde.
-local MyEvents = {}
-local DuplicateEvent = false
-local tMsgReceived = tMsg
-local BacklogEvent = {}
-local MessageToSend = false
-local ModifiedTime = 0
-local count = 0
-SendVarToRover("MsgReceived",tMsgReceived)
+	local MyEvents = {}
+	local DuplicateEvent = false
+	local tMsgReceived = tMsg
+	local BacklogEvent = {}
+	local MessageToSend = false
+	local ModifiedTime = 0
+	local count = 0
+	SendVarToRover("MsgReceived",tMsgReceived)
 
-if tMsg == nil then 
-	return 
+	if tMsg == nil then 
+		return
 	elseif not tMsg.MajorVersionRewrite or tMsg.MajorVersionRewrite == nil then
 		ChatSystemLib.Command("/w"..strSender..", your Event Manager Client is out of date. Please visit http://wildstar.curseforge.com/ws-addons/223228-eventmanager to update.")
 		return
-		elseif tMetaData.SyncChannel == tMsg.tMetaData.SyncChannel and tMsg.tMetaData.Passphrase ~= tMetaData.Passphrase then
-			Print ("Your passphrase does not match the passphrase for this channel, please verify your information is correct.")
-			return
-		else 
-			if tMetaData.SecurityRequired ~= nil and tMetaData.SecurityRequired == true then 
-				if not self:AuthSender(strSender) then 
-				return
-			end 
-		end
-	end
-
-	if tMsg.tMetaData.nLatestUpdate == 0 and tMetaData.nLatestUpdate > 0 then
-		
+	elseif tMetaData.SyncChannel == tMsg.tMetaData.SyncChannel and tMsg.tMetaData.Passphrase ~= tMetaData.Passphrase then
+		Print ("Your passphrase does not match the passphrase for this channel, please verify your information is correct.")
+		return
+	elseif tMetaData.SecurityRequired ~= nil and tMetaData.SecurityRequired == true then 
+		if not self:AuthSender(strSender) then	return end
+	elseif tMsg.tMetaData.nLatestUpdate == 0 and tMetaData.nLatestUpdate > 0 then
 		MsgTrigger = "New Channel User Ping Reply."
 		self:EventsMessenger(MsgTrigger)
 		return
-	end
-	
-	for tMsgEventId, tMsgEvent in pairs(tMsg.tEvents) do
-		DuplicateEvent = false
-		for key, Event in pairs(tEvents) do
-			SendVarToRover("tMsgEventskey",key)
-			SendVarToRover("tMsgEventsvalue", Event)
-
-			if tMsgEvent.EventId == Event.EventId then
-				if not tMsgEvent.tApplicationsProcessed then 
-				else
-					for idx, ProcessedApp in pairs(tMsgEvent.Detail.tApplicationsProcessed) do
-						for idx2, ProcessedLiveApp in pairs(Event.Detail.tApplicationsProcessed) do 
-							if ProcessedApp == ProcessedLiveApp then
-								DuplicateEvent = true
-							else
-								DuplicateEvent = false
-								break
+	else
+		for tMsgEventId, tMsgEvent in pairs(tMsg.tEvents) do
+			SendVarToRover("tMsgEventskey",tMsgEventId)
+			SendVarToRover("tMsgEventsvalue", tMsgEvent)
+			DuplicateEvent = false
+			for key, Event in pairs(tEvents) do
+				SendVarToRover("tEventskey",key)
+				SendVarToRover("tEventsvalue", Event)
+				if tMsgEvent.EventId == Event.EventId then
+					if not tMsgEvent.tApplicationsProcessed then return
+					else
+						for idx, ProcessedApp in pairs(tMsgEvent.Detail.tApplicationsProcessed) do
+							for idx2, ProcessedLiveApp in pairs(Event.Detail.tApplicationsProcessed) do 
+								if ProcessedApp == ProcessedLiveApp then
+									DuplicateEvent = true
+									Print("Duplicate true "..idx..", "..idx2)
+								else
+									DuplicateEvent = false
+									Print("Duplicate false "..idx..", "..idx2)
+								end
+								if DuplicateEvent == false then
+									break
+								end
 							end
 						end
 					end
 				end
-			end
-		end	
-		SendVarToRover("DuplicateEventFlag", DuplicateEvent)
-		if DuplicateEvent == false then
-			SendVarToRover("tEvents",tEvents)
-			SendVarToRover("tMsg.tEvents[tMsgEventId]",tEvents[tMsgEventId])
-			tEvents[tMsgEventId] = self:ProcessLiveEvents(tMsgEvent)
-		else
-			tMsg[tMsgEventId] = nil
+			SendVarToRover("DuplicateEventFlag", DuplicateEvent)
+			if DuplicateEvent == false then
+				SendVarToRover("tEvent",Event)
+				SendVarToRover("tMsgEvent",tMsgEvent)
+				tEvents[tMsgEventId] = self:ProcessLiveEvents(tMsgEvent)
+			else
+				tMsg[tMsgEventId] = nil
 
-			--table.insert(tEvents,tMsg.tEvents[tMsgEventId])
-			MsgTrigger = "New Event from sync channel"
-			MessageToSend = true
-			Print("Events Manager: New Events received from sync channel.")
+				--table.insert(tEvents,tMsg.tEvents[tMsgEventId])
+				MsgTrigger = "New Event from sync channel"
+				MessageToSend = true
+				Print("Events Manager: New Events received from sync channel.")
+			end
 		end
 	end
+
 
 	if tMsg.tEventsBacklog == nil or tMsg.tEventsBacklog == {} then
 		tMsg.tEventsBacklog = nil
 		MsgTrigger = "tMsg.tEventsBacklog was empty for event "..tMsg.tEventsBacklog
 	else
-		count = 1
+		count = 0
 		for PendingEventId, PendingEvent in pairs(tMsg.tEventsBacklog) do
-		count = count
-		SendVarToRover("PendingBacklogEvent", BacklogEvent)
-		SendVarToRover("tMsgBacklogkey", PendingEventId)
-		SendVarToRover("tMsgBacklogvalue", PendingEvent)
+			count = count
+			SendVarToRover("PendingBacklogEvent", BacklogEvent)
+			SendVarToRover("tMsgBacklogkey", PendingEventId)
+			SendVarToRover("tMsgBacklogvalue", PendingEvent)
 
-		BacklogEvent[PendingEventId] = PendingEvent
-		SendVarToRover("BacklogEvent", BacklogEvent[PendingEventId])
-		if not tMsg.tEventsBacklog[PendingEventId].BacklogId then
-		tEventsBacklog[PendingEventId] = nil
-		MessageToSend = true
-	else
-		for appId, app in (tEvents[PendingEvent.EventId].Detail.tApplicationsProcessed) do
-		if appId == PendingEventId then
-		PendingEvent = nil
-		MsgTrigger = "Application already processed, removing."
+			BacklogEvent[PendingEventId] = PendingEvent
+			SendVarToRover("BacklogEvent", BacklogEvent[PendingEventId])
+			if not tMsg.tEventsBacklog[PendingEventId].BacklogId then
+				tEventsBacklog[PendingEventId] = nil
+				MessageToSend = true
+			else
+				for appId, app in (tEvents[PendingEvent.EventId].Detail.tApplicationsProcessed) do
+					if appId == PendingEventId then
+						PendingEvent = nil
+						MsgTrigger = "Application already processed, removing."
 
-	else 			
-		tEventsBacklog, MessageToSend, ModifiedTime = self:ProcessEvents(tEventsBacklog[PendingEvent])
-		table.insert(tEvents[PendingEvent.EventId].Detail.tApplicationsProcessed, PendingEvent)
+					else 			
+					tEventsBacklog, MessageToSend, ModifiedTime = self:ProcessEvents(tEventsBacklog[PendingEvent])
+					table.insert(tEvents[PendingEvent.EventId].Detail.tApplicationsProcessed, PendingEvent)
 
-		MsgTrigger = "tMsg.tEventsBacklog Processed "..count
+					MsgTrigger = "tMsg.tEventsBacklog Processed "..count
+					end
+				end
+			end
+			count = count + 1
+			SendVarToRover("Backlogs Processed",count)
+		end
 	end
-end
-end
-count = count + 1
-SendVarToRover("Backlogs Processed",count)
-end
-end
 
-for key, event in ipairs(tEvents) do
-	for idx, app in ipairs(tEvents[key].Detail.tApplicationsProcessed) do
-		for idx2, DupeApp in pairs(tEvents[key].Detail.tApplicationsProcessed) do
-			if app == DupeApp then
-				ProcessDupe = true
-			end
-			if DupeApp == true then
-				tEvents[key].Detail.tApplicationsProcessed[idx2] = nil
-			end
 
-			SendVarToRover("App/Dupe",app.."/"..DupeApp)
-			if app == DupeApp then
-				DupeApp = nil
+	for key, event in ipairs(tEvents) do
+		for idx, app in ipairs(tEvents[key].Detail.tApplicationsProcessed) do
+			for idx2, DupeApp in pairs(tEvents[key].Detail.tApplicationsProcessed) do
+				if app == DupeApp then
+					ProcessDupe = true
+				end
+				if DupeApp == true then
+					tEvents[key].Detail.tApplicationsProcessed[idx2] = nil
+				end
+
+				SendVarToRover("App/Dupe",app.."/"..DupeApp)
+				if app == DupeApp then
+					DupeApp = nil
+				end
 			end
 		end
 	end
-end	
-
-SendVarToRover("tEvents",tEvents)
-SendVarToRover("tMetaData",tMetaData)
-SendVarToRover("UpdateComparison",tMetaData.nLatestUpdate - tMsg.tMetaData.nLatestUpdate)
-SendVarToRover("MessageFlag", MessageToSend)
-Print(tostring(tMetaData.nLatestUpdate > tMsg.tMetaData.nLatestUpdate))
-if tMetaData.nLatestUpdate > tMsg.tMetaData.nLatestUpdate then
-	MsgTrigger = "tMetaUpdate > tMsgMetaUpdate"
-	MessageToSend = true
-end
-if MessageToSend == true then
-MsgTrigger = MsgTrigger
-self:EventsMessenger(MsgTrigger)
-end
-	--Print("Incoming Message Processing Complete")
+	SendVarToRover("tEvents",tEvents)
+	SendVarToRover("tMetaData",tMetaData)
+	SendVarToRover("UpdateComparison",tMetaData.nLatestUpdate - tMsg.tMetaData.nLatestUpdate)
+	SendVarToRover("MessageFlag", MessageToSend)
+	Print(tostring(tMetaData.nLatestUpdate > tMsg.tMetaData.nLatestUpdate))
+	if tMetaData.nLatestUpdate > tMsg.tMetaData.nLatestUpdate then
+		MsgTrigger = "tMetaUpdate > tMsgMetaUpdate"
+		MessageToSend = true
+	end
+	if MessageToSend == true then
+		MsgTrigger = MsgTrigger
+		self:EventsMessenger(MsgTrigger)
+	end
+	end
+		--Print("Incoming Message Processing Complete")
 	tMetaData.nLatestUpdate = os.time()
 	self:PopulateItemList(tEvents)
 end
@@ -447,14 +446,16 @@ function EventManager:EventsMessenger(strTrigger)
 
 	function EventManager:CleanTable()
 		LocalEvents = {}
-		for key, EventId in pairs(tEvents) do
+		for key, Event in pairs(tEvents) do
 			SendVarToRover("CleaningKey", key)
-			SendVarToRover("CleaningValue", EventId)
-			if EventId.nEventSortValue < tonumber(os.time())-3600 then
+			SendVarToRover("CleaningValue", Event)
+			SendVarToRover("Local Events",LocalEvents)
+			if Event.nEventSortValue < tonumber(os.time())-3600 then
+				SendVarToRover("EventSortValue", Event.nEventSortValue)
 				LocalEvents[key] = nil
 			end
-			if EventId.EventSyncChannel == tMetaData.SyncChannel then
-				LocalEvents[EventId.EventId] = EventId
+			if Event.EventSyncChannel == tMetaData.SyncChannel then
+				LocalEvents[Event.EventId] = EventId
 			end
 		end
 		return LocalEvents
@@ -1341,89 +1342,97 @@ end
 
 function EventManager:ProcessLiveEvents(t)
 	local bNewMessages = false
-	local tReceived = t
+	local t = t
 	local nEventChanged = 0
 	local ProcessedCount = 0
-	SendVarToRover("Live Event to process", tReceived)
+	if not t then return end
+	SendVarToRover("Live Event to process", t)
 	if t.Owner == GameLib.GetPlayerUnit():GetName() then
 		local tNeedsRemoval = {}
 		MsgTrigger = "Event is owned by player"
-		if tMsg then
-				MsgTrigger = "tMsgExists."
-			for PendingId, PendingEvent in pairs(tMsg.tEvents) do
+		if t then
+			MsgTrigger = "tMsgEventExists."
+			for PendingId, PendingEvent in pairs(t) do
 				SendVarToRover("Pending Live Id", PendingId)
 				SendVarToRover("Pending Live Event",PendingEvent)
-			if not PendingEvent then return end
-				SendVarToRover("Pending BacklogExpiration",PendingEvent.nEventSortValue)
-			if PendingEvent.nEventSortValue > os.time() then
-				MsgTrigger = "Pending Event has not expired."
-			if not PendingEvent.Detail.tApplicationsProcessed then 
-
-			else
-			for ProcessedId, ProcessedApp in pairs(tEvents.Detail.tApplicationsProcessed) do
-				if ProcessedId == PendingId then
-					MsgTrigger = "PendingId already known, deleting." 
-					table.insert(tNeedsRemoval,PendingId)
+				if not PendingEvent then
 					break
-				else
-					for EventId, Event in pairs(tEvents) do
-						if EventId == PendingId then
-						SendVartoRover(EventId==PendingId or "false")
-							for __, attendee in pairs(Event.Detail.tCurrentAttendees) do
-								for __, Player in pairs(PendingEvent.Detail.tCurrentAttendess) do
-									if Player.Name == attendee.Name and	Player.Status == attendee.Status then
-										for idx, Role in pairs (Player.Name.Roles) do
-											SendVarToRover("Pending Roles",Role)
-											local bSame = true
-											for roleName, bSelected in pairs(Role) do
-												if attendee.Role[roleName] ~= bSelected then
-													bSame = false
+				else 
+				SendVarToRover("Pending BacklogExpiration",PendingEvent.nEventSortValue)
+					if PendingEvent.nEventSortValue > os.time() then
+						MsgTrigger = "Pending Event has not expired."
+					if not PendingEvent.Detail.tApplicationsProcessed then 
+						break
+					else
+					for ProcessedId, ProcessedApp in pairs(tEvents.Detail.tApplicationsProcessed) do
+						if ProcessedId == PendingId then
+							MsgTrigger = "PendingId already known, deleting." 
+							--table.insert(tNeedsRemoval,PendingId)
+							break
+						else
+							for EventId, Event in pairs(tEvents) do
+								if EventId == PendingId then
+									Print(EventId==PendingId or "false")
+									for __, attendee in pairs(Event.Detail.tCurrentAttendees) do
+										for __, Player in pairs(PendingEvent.Detail.tCurrentAttendess) do
+											if Player.Name == attendee.Name and	Player.Status == attendee.Status then
+												Print("Player and Status already known")
+												for idx, Role in pairs (Player.Name.Roles) do
+													SendVarToRover("Pending Roles",Role)
+													local bSame = true
+													for roleName, bSelected in pairs(Role) do
+														if attendee.Role[roleName] ~= bSelected then
+															bSame = false
+															Print("Player changes roles")
+														end
+													end
+													if bSame then 
+														MsgTrigger = "Attendee's status and roles have not changed, ignoring."
+														table.insert(tNeedsRemoval,PendingId)
+														Print("No changes, deleting tMsg "..PendingId)
+														return
+													else
+														attendee.Status = Player.Status
+														MsgTrigger = "A change to an attendee's status was made, processing."
+														--table.insert(tNeedsRemoval,PendingId)
+													end
 												end
+											else
+												MsgTrigger = "An attendee's role and status have changed, or this is a new attendee"
+												attendee.Roles = PendingEvent.BacklogRoles
+												table.insert(Event.Detail.tCurrentAttendees,
+													{Name = PendingEvent.BacklogOwner,
+													nSignUpTime = PendingEvent.nBacklogSignUpTime,
+													Status = PendingEvent.BacklogStatus,
+													Roles = PendingEvent.BacklogRoles})
+												print(table.concat(tNeedsRemoval, ', '))
+												--table.insert(tNeedsRemoval, PendingId)
 											end
 										end
-										if bSame then 
-											MsgTrigger = "Attendee's status and roles have not changed, ignoring."
-											table.insert(tNeedsRemoval,PendingId)
-											return
-										else
-											attendee.Status = Player.Status
-											MsgTrigger = "A change to an attendee's status was made, processing."
-											table.insert(tNeedsRemoval,PendingEventId)
-										end
-									else
-										MsgTrigger = "An attendee's role and status have changed, or this is a new attendee"
-										attendee.Roles = PendingEvent.BacklogRoles
-										table.insert(Event.Detail.tCurrentAttendees,
-											{Name = PendingEvent.BacklogOwner,
-											nSignUpTime = PendingEvent.nBacklogSignUpTime,
-											Status = PendingEvent.BacklogStatus,
-											Roles = PendingEvent.BacklogRoles})
-										print(table.concat(tNeedsRemoval, ', '))
-										table.insert(tNeedsRemoval, PendingEventId)
 									end
+								else
+									tEvents[PendingId] = PendingEvent
+									--table.insert(tNeedsRemoval, PendingId)
 								end
 							end
-						else
-							tEvent[PendingId] = PendingEvent
 						end
-					end
+					end	
 				end
-			end	
+			end
+			ProcessedCount = ProcessedCount + 1
 		end
 	end
-ProcessedCount = ProcessedCount + 1
-end
-end
-end
-SendVarToRover("Processed tEvents", t)
-if tNeedsRemoval then
-	SendVarToRover("tMsg Event(s) to remove",tNeedsRemoval)
-	for idx, id in ipairs(tNeedsRemoval) do
-		MsgTrigger = "Applications removed: "..#tNeedsRemoval
-		tEventsBacklog[id] = nil
+	SendVarToRover("Processed tEvents", ProcessedCount)
+	if tNeedsRemoval then
+		SendVarToRover("tMsg Event(s) to remove",tNeedsRemoval)
+		for idx, id in ipairs(tNeedsRemoval) do
+			MsgTrigger = "Applications removed: "..#tNeedsRemoval
+			tEventsBacklog[id] = nil
+		end
+	end
 	end
 end
-return t
+	return t
 end
 
 function EventManager:ProcessBacklogEvents(t)

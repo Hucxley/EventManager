@@ -1052,12 +1052,23 @@ function EventManager:OnListItemSelected(wndHandler, wndControl)
 		else
 		end
 	end
-
+	SendVarToRover("SelectedEvent",SelectedEvent)
 	for key, event in pairs(tEvents) do
 		if SelectedEvent.Owner == event.Owner then --GameLib.GetPlayerUnit():GetName() then
 			self.wndSelectedListItemDetail:FindChild("EditEventButton"):Show(true)
 		else
 			self.wndSelectedListItemDetail:FindChild("EditEventButton"):Show(false)
+		end
+		local ShowSignUpButton = true
+		for idx, player in pairs(SelectedEvent.Detail.tCurrentAttendees) do
+			if player.Name == GameLib.GetPlayerUnit():GetName() and player.Status == "Attending" then --GameLib.GetPlayerUnit():GetName() then
+				ShowSignUpButton = false
+				Print(tostring(ShowSignUpButton))
+				break
+			end
+		end
+		if ShowSignUpButton == false then
+			self.wndSelectedListItemDetail:FindChild("SignUpButton"):Show(false)
 		end
 	end
 	self.wndSelectedListItemDetail:FindChild("SelectedEventDescriptionBox"):SetText(selectedItemText.Description)

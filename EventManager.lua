@@ -188,7 +188,7 @@ function EventManager:OnDocLoaded()
 		self.wndSecurity = Apollo.LoadForm(self.xmlDoc,"SecurityForm",self.wndOptions,self)
 		self.wndSecurity:Show(false)
 		-- end add by Feyde
-		
+
 		-- if the xmlDoc is no longer needed, you should set it to nil
 		-- self.xmlDoc = nil
 		
@@ -355,7 +355,7 @@ if tMsg == nil then
 		SendVarToRover("PendingBacklogEvent", BacklogEvent)
 		SendVarToRover("tMsgBacklogkey", PendingEventId)
 		SendVarToRover("tMsgBacklogvalue", PendingEvent)
-		
+
 		BacklogEvent[PendingEventId] = PendingEvent
 		SendVarToRover("BacklogEvent", BacklogEvent[PendingEventId])
 		if not tMsg.tEventsBacklog[PendingEventId].BacklogId then
@@ -370,7 +370,7 @@ if tMsg == nil then
 	else 			
 		tEventsBacklog, MessageToSend, ModifiedTime = self:ProcessEvents(tEventsBacklog[PendingEvent])
 		table.insert(tEvents[PendingEvent.EventId].Detail.tApplicationsProcessed, PendingEvent)
-		
+
 		MsgTrigger = "tMsg.tEventsBacklog Processed "..count
 	end
 end
@@ -423,7 +423,7 @@ function EventManager:EventsMessenger(strTrigger)
 	tMetaData = tMetaData
 	local tEvents = tEvents
 	local tEventsBacklog = tEventsBacklog
-	
+
 
     -- prepare our message to send to other users
     local t = {}
@@ -540,9 +540,9 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 			EventModified = os.time(),
 			tApplicationsProcessed = {}
 			},
-			
+
 		}
-		
+
 		if NewEventEntry.Detail.Hour > 12 then
 			NewEventEntry.Detail.Hour = NewEventEntry.Detail.Hour - 12
 			NewEventEntry.AmPm = "pm"
@@ -564,7 +564,7 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 			MsgTrigger = "New Event Created, Creating Backlog Event for Event Owner"
 			BacklogId = GameLib.GetRealmName()..GameLib.GetPlayerUnit():GetName()..os.time()
 			for NewEventId, NewEvent in pairs(NewEventEntry) do
-				
+
 				tEventsBacklog[BacklogId] = {		
 				EventId = NewEventEntry.EventId,
 				strEventStatus = NewEventEntry.strEventStatus,
@@ -631,7 +631,7 @@ function EventManager:OnEditEventFormOn(wndHandler, wndControl, eMouseButton)
 			wnd:FindChild("DPSRoleButton"):SetCheck(true)
 		end
 	end
-	
+
 end
 
 self.wndEditEvent:SetData(SelectedEventData)
@@ -681,7 +681,7 @@ function EventManager:OnEventEditSubmit(wndHandler,wndControl,eMouseButton)
 		Print("Event Manager error: Events cannot be edited to occur in the past.")
 		tEvents[EditedId] = EditedEvent
 	end	
-	
+
 	for idx, player in pairs (EditedEvent.Detail.tCurrentAttendees) do
 	if player.Name == GameLib.GetPlayerUnit():GetName() then
 		player.Roles = self:GetSelectedRoles(wndEdit:FindChild("TankRoleButton"):IsChecked(),
@@ -783,7 +783,7 @@ function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
 	SendVarToRover("EventDecliningData",tEvent)
 	SendVarToRover("tEventsBacklog",tEventsBacklog[DeclinedBacklogId])
 
-	
+
 	tEventsBacklog[DeclinedBacklogId] = {		
 	EventId = nDeclinedEventId,
 	EventName = tEvents[nDeclinedEventId].Detail.EventName,
@@ -874,7 +874,7 @@ function EventManager:PopulateItemList(list)
 	    -- add 20 items
 	    for Event, EventId in pairs(list) do
 	    	self:AddItem(Event)
-	    	
+
 	    end
 	    self.wndItemList:ArrangeChildrenVert(0,SortListItems)
 	 end
@@ -960,7 +960,7 @@ if tEvent.strEventStatus == "Canceled" then
 	strEventInfo = "The event, "..tEventInfo.EventName.." scheduled for "..string.format("%02d",tEventInfo.Month).."/"..string.format("%02d",tEventInfo.Day).."/"..tEventInfo.Year..", at\n"..
 	string.format("%02d",tEventInfo.Hour)..":"..string.format("%02d",tEventInfo.Minute).." "..tEventInfo.AmPm.." "..
 	string.upper(tEventInfo.TimeZone).."\nhas been cancelled by "..tEvent.Owner
-	
+
 	SignUpButton:Show(false)
 	DeclineButton:Show(false)
 else
@@ -1058,6 +1058,23 @@ for key, event in pairs(tEvents) do
 			self.wndSelectedListItemDetail:FindChild("EditEventButton"):Show(true)
 		else
 			self.wndSelectedListItemDetail:FindChild("EditEventButton"):Show(false)
+		end
+		for idx, attendee in pairs(tEvents[SelectedEvent.EventId].Detail.tCurrentAttendees) do
+			if attendee.Name == GameLib.GetPlayerUnit():GetName() then
+				self.wndSelectedListItemDetail:FindChild("SignUpButton"):Show(false)
+			else
+				self.wndSelectedListItemDetail:FindChild("SignUpButton"):Show(true)
+			end
+		
+			for BacklogId, BacklogEvent in pairs(tEventsBacklog) do
+				if BacklogId == SelectedEvent.EventId then
+					if BacklogEvent.BacklogOwner == GameLib.GetPlayerUnit():GetName() and BacklogEvent.BacklogOwnerStatus == "Attending" then 
+						self.wndSelectedListItemDetail:FindChild("SignUpButton"):Show(false)
+					else
+						self.wndSelectedListItemDetail:FindChild("SignUpButton"):Show(true)
+					end
+				end
+			end
 		end
 	end
 	self.wndSelectedListItemDetail:FindChild("SelectedEventDescriptionBox"):SetText(selectedItemText.Description)
@@ -1215,7 +1232,7 @@ function EventManager:OnDelayTimer()
 			self:EventsMessenger(MsgTrigger)
 		end
 
-		
+
 		else self.timerDelay:Start()
 		end
 	end
@@ -1332,64 +1349,68 @@ function EventManager:ProcessLiveEvents(t)
 		local tNeedsRemoval = {}
 		MsgTrigger = "Event is owned by player"
 		if tMsg then
-			tMsgTrigger = "tMsgExists."
+				MsgTrigger = "tMsgExists."
 			for PendingId, PendingEvent in pairs(tMsg.tEvents) do
-			SendVarToRover("Pending Live Id", PendingId)
-			SendVarToRover("Pending Live Event",PendingEvent)
+				SendVarToRover("Pending Live Id", PendingId)
+				SendVarToRover("Pending Live Event",PendingEvent)
 			if not PendingEvent then return end
-			SendVarToRover("Pending BacklogExpiration",PendingEvent.nEventSortValue)
+				SendVarToRover("Pending BacklogExpiration",PendingEvent.nEventSortValue)
 			if PendingEvent.nEventSortValue > os.time() then
-			MsgTrigger = "Pending Event has not expired."
+				MsgTrigger = "Pending Event has not expired."
 			if not PendingEvent.Detail.tApplicationsProcessed then 
 
-		else
+			else
 			for ProcessedId, ProcessedApp in pairs(tEvents.Detail.tApplicationsProcessed) do
 				if ProcessedId == PendingId then
-				MsgTrigger = "PendingId already known, deleting." 
-				table.insert(tNeedsRemoval,PendingId)
-			else
-				for EventId, Event in pairs(tEvents) do
-					if EventId == PendingId then
-					SendVartoRover(EventId==PendingId or "false")
-					for __, attendee in pairs(Event.Detail.tCurrentAttendees) do
-					for __, Player in pairs(PendingEvent.Detail.tCurrentAttendess) do
-					if Player.Name == attendee.Name and	Player.Status == attendee.Status then
-					for idx, Role in pairs (Player.Name.Roles) do
-						SendVarToRover("Pending Roles",Role)
-						local bSame = true
-						for roleName, bSelected in pairs(Role) do
-							if attendee.Role[roleName] ~= bSelected then
-							bSame = false
+					MsgTrigger = "PendingId already known, deleting." 
+					table.insert(tNeedsRemoval,PendingId)
+					break
+				else
+					for EventId, Event in pairs(tEvents) do
+						if EventId == PendingId then
+						SendVartoRover(EventId==PendingId or "false")
+							for __, attendee in pairs(Event.Detail.tCurrentAttendees) do
+								for __, Player in pairs(PendingEvent.Detail.tCurrentAttendess) do
+									if Player.Name == attendee.Name and	Player.Status == attendee.Status then
+										for idx, Role in pairs (Player.Name.Roles) do
+											SendVarToRover("Pending Roles",Role)
+											local bSame = true
+											for roleName, bSelected in pairs(Role) do
+												if attendee.Role[roleName] ~= bSelected then
+													bSame = false
+												end
+											end
+										end
+										if bSame then 
+											MsgTrigger = "Attendee's status and roles have not changed, ignoring."
+											table.insert(tNeedsRemoval,PendingId)
+											return
+										else
+											attendee.Status = Player.Status
+											MsgTrigger = "A change to an attendee's status was made, processing."
+											table.insert(tNeedsRemoval,PendingEventId)
+										end
+									else
+										MsgTrigger = "An attendee's role and status have changed, or this is a new attendee"
+										attendee.Roles = PendingEvent.BacklogRoles
+										table.insert(Event.Detail.tCurrentAttendees,
+											{Name = PendingEvent.BacklogOwner,
+											nSignUpTime = PendingEvent.nBacklogSignUpTime,
+											Status = PendingEvent.BacklogStatus,
+											Roles = PendingEvent.BacklogRoles})
+										print(table.concat(tNeedsRemoval, ', '))
+										table.insert(tNeedsRemoval, PendingEventId)
+									end
+								end
+							end
+						else
+							tEvent[PendingId] = PendingEvent
 						end
 					end
 				end
-				if bSame then 
-					MsgTrigger = "Attendee's status and roles have not changed, ignoring."
-					table.insert(tNeedsRemoval,PendingId)
-					return
-				else
-					attendee.Status = Player.Status
-					MsgTrigger = "A change to an attendee's status was made, processing."
-					table.insert(tNeedsRemoval,PendingEventId)
-				end
-			else	
-				MsgTrigger = "An attendee's role and status have changed, or this is a new attendee"
-				attendee.Roles = PendingEvent.BacklogRoles
-				table.insert(Event.Detail.tCurrentAttendees,
-					{Name = PendingEvent.BacklogOwner,
-					nSignUpTime = PendingEvent.nBacklogSignUpTime,
-					Status = PendingEvent.BacklogStatus,
-					Roles = PendingEvent.BacklogRoles})
-				table.insert(tNeedsRemoval, PendingEventId)
-			end
+			end	
 		end
 	end
-end
-end
-end
-end
-end
-end
 ProcessedCount = ProcessedCount + 1
 end
 end
@@ -1474,6 +1495,7 @@ end
 return t, bNewMessages, nEventChanged
 end
 end
+Print("Backlog "..t.BacklogId.." for "..t.EventName.." Processed")
 end
 
 
@@ -1490,7 +1512,7 @@ function EventManager:ProcessMyEvents(t)
 		local tNeedsRemoval = {}
 		for PendingId, PendingEvent in pairs(tEventsBacklog) do
 		if PendingEvent.nBacklogExpirationTime > os.time() then
-		
+
 		for ProcessedId, ProcessedApp in pairs(tEvents.tApplicationsProcessed) do
 			if ProcessedId == PendingId then 
 			table.insert(tNeedsRemoval,PendingId)
@@ -1572,7 +1594,7 @@ function EventManager:OnSecurityChecked(wndHandler, wndControl, eMouseButton)
 		end	
 	end
 	self.wndSecurity:Show(true)
-	
+
 end
 
 function EventManager:OnSecurityUnChecked(wndHandler, wndControl, eMouseButton)

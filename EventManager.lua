@@ -310,7 +310,7 @@ if tMsg == nil then
 		return
 	end
 	
-	for tMsgEventId, tMsgEvent in pairs(tMsg.tEvents) do
+	--[[for tMsgEventId, tMsgEvent in pairs(tMsg.tEvents) do
 		DuplicateEvent = false
 		for key, Event in pairs(tEvents) do
 			SendVarToRover("tMsgEventskey",key)
@@ -398,7 +398,11 @@ for key, event in ipairs(tEvents) do
 			end
 		end
 	end
-end	
+end]]--
+
+self:ProcessLiveEvents()
+self:ProcessBacklogEvents()
+self:ProcessMyBacklog()	
 
 SendVarToRover("tEvents",tEvents)
 SendVarToRover("tMetaData",tMetaData)
@@ -1333,96 +1337,101 @@ function EventManager:OnWindowManagementReady()
 	Event_FireGenericEvent("WindowManagementAdd", {wnd = self.wndMain, strName = "Event Manager"})
 end
 
-function EventManager:ProcessLiveEvents(t)
+function EventManager:ProcessLiveEvents()
 	local bNewMessages = false
-	local tReceived = t
 	local nEventChanged = 0
 	local ProcessedCount = 0
-	SendVarToRover("Live Event to process", tReceived)
-	if t.Owner == GameLib.GetPlayerUnit():GetName() then
-		local tNeedsRemoval = {}
-		MsgTrigger = "Event is owned by player"
-		if tMsg then
-			MsgTrigger = "tMsgExists."
-			for PendingId, PendingEvent in pairs(tMsg.tEvents) do
-			SendVarToRover("Pending Live Id", PendingId)
-			SendVarToRover("Pending Live Event",PendingEvent)
-			if not PendingEvent then return end
-			SendVarToRover("Pending BacklogExpiration",PendingEvent.nEventSortValue)
-			if PendingEvent.nEventSortValue > os.time() then
-			MsgTrigger = "Pending Event has not expired."
-			if not PendingEvent.Detail.tApplicationsProcessed then 
-
-			else
-			for ProcessedId, ProcessedApp in pairs(tEvents.Detail.tApplicationsProcessed) do
-				if ProcessedId == PendingId then
-				MsgTrigger = "PendingId already known, deleting." 
-				table.insert(tNeedsRemoval,PendingId)
-			else
-				for EventId, Event in pairs(tEvents) do
-					if EventId == PendingId then
-					SendVartoRover(EventId==PendingId or "false")
-					for __, attendee in pairs(Event.Detail.tCurrentAttendees) do
-					for __, Player in pairs(PendingEvent.Detail.tCurrentAttendess) do
-					if Player.Name == attendee.Name and	Player.Status == attendee.Status then
-					for idx, Role in pairs (Player.Name.Roles) do
-						SendVarToRover("Pending Roles",Role)
-						local bSame = true
-						for roleName, bSelected in pairs(Role) do
-							if attendee.Role[roleName] ~= bSelected then
-							bSame = false
-						end
+	if not tMsg then return end
+	SendVarToRover("Msg Events to process", tMsg.tEvents)
+	for IncomingId, IncomingEvent in pairs(tMsg.tEvents) do
+		if IncomingEvent.Owner ~= GameLib.GetPlayerUnit():GetName() then
+			SendVarToRover("Pending Live Id", IncomingId)
+			SendVarToRover("Pending Live Event",IncomingEvent)
+			for LiveId, LiveEvent in pairs(tEvents) do
+				if IncomingId == LiveId then 
+					if IncomingEvent.EventModified > LiveEvent.EventModified then
+						tEvents[IncomingId] = IncomingEvent
+					else
 					end
+				else tEvents[IncomingId] = IncomingEvent
 				end
-				if bSame then 
-					MsgTrigger = "Attendee's status and roles have not changed, ignoring."
-					table.insert(tNeedsRemoval,PendingId)
-					return
-				else
-					attendee.Status = Player.Status
-					MsgTrigger = "A change to an attendee's status was made, processing."
-					table.insert(tNeedsRemoval,PendingEventId)
-				end
-			else	
-				MsgTrigger = "An attendee's role and status have changed, or this is a new attendee"
-				attendee.Roles = PendingEvent.BacklogRoles
-				table.insert(Event.Detail.tCurrentAttendees,
-					{Name = PendingEvent.BacklogOwner,
-					nSignUpTime = PendingEvent.nBacklogSignUpTime,
-					Status = PendingEvent.BacklogStatus,
-					Roles = PendingEvent.BacklogRoles})
-				table.insert(tNeedsRemoval, PendingEventId)
 			end
 		end
 	end
-end
-end
-end
-end
-end
-end
-ProcessedCount = ProcessedCount + 1
-end
-end
-end
-SendVarToRover("Processed tEvents", t)
-if tNeedsRemoval then
-	SendVarToRover("tMsg Event(s) to remove",tNeedsRemoval)
-	for idx, id in ipairs(tNeedsRemoval) do
-		MsgTrigger = "Applications removed: "..#tNeedsRemoval
-		tEventsBacklog[id] = nil
-	end
-end
-return t
+	ProcessedCount = ProcessedCount + 1
+	SendVarToRover("Processed tEvents", ProcessedCount)
 end
 
-function EventManager:ProcessBacklogEvents(t)
+function EventManager:ProcessBacklogEvents()
 	local bNewMessages = false
-	local tReceived = t
 	local nEventChanged = 0
-	SendVarToRover("Event to process", tReceived)
-	if t.Owner == GameLib.GetPlayerUnit():GetName() then
-		local tNeedsRemoval = {}
+	local KnownAttendee
+	local AttendeeIdx
+	local ProcessedCount = 0
+
+	if not tMsg then return end
+	SendVarToRover("Backlog to process", tMsg.tEventsBacklog)
+	for LiveEventId, LiveEvent in pairs(tEvents) do
+		if LiveEvent.Owner ~= GameLib.GetPlayerUnit():GetName() then
+			return
+		else
+			for PendingId, PendingEvent in pairs(tMsg.tEventsBacklog) do
+				if LiveEventId ~= PendingEvent.EventId then
+				else
+				
+				-- compare processed apps with pending apps
+				for AppId, App in pairs(LiveEvent.Detail.tApplicationsProcessed) do
+					if AppId == PendingId then
+						-- event has been processed before
+						return end
+					end
+				end
+
+				--check known attendees to see if new attendee or role/status change
+				KnownAttendee = false
+				for idx,attendee in pairs(LiveEvent.Detail.tCurrentAttendees) do
+					if attendee.Name == PendingEvent.BacklogOwner then
+						KnownAttendee = true
+						AttendeeIdx = idx
+					end
+				end
+				
+				-- attendee known, check status	
+				if KnownAttendee == true then
+				local attendee = LiveEvent.Detail.tCurrentAttendees[AttendeeIdx]
+					if attendee.Status ~= PendingEvent.BacklogStatus then
+						-- Applicant status/role change
+						attendee.Status = PendingEvent.BacklogStatus
+						attendee.Roles = PendingEvent.BacklogRoles
+						table.insert(LiveEvent.Detail.tApplicationsProcessed, PendingId)
+						LiveEvent.EventModified = os.time()
+					end
+				end
+
+				if KnownAttendee == false then
+					-- New Applicant, insert record
+					table.insert(LiveEvent.Detail.tCurrentAttendees,
+									{Name = PendingEvent.BacklogOwner,
+									nSignUpTime = PendingEvent.nBacklogSignUpTime,
+									Status = PendingEvent.BacklogStatus,
+									Roles = PendingEvent.BacklogRoles})
+					LiveEvent.EventModified = os.time()
+					table.insert(LiveEvent.Detail.tApplicationsProcessed, PendingId)
+				end
+			end
+		end
+	ProcessedCount = ProcessedCount + 1
+	SendVarToRover("Processed Backlog Events", ProcessedCount)
+	end
+end
+ 
+
+
+
+
+
+
+		--[[local tNeedsRemoval = {}
 		MsgTrigger = "Backlog Event is owned by player"
 		for PendingId, PendingEvent in pairs(tEventsBacklog) do
 		SendVarToRover("Pending Backlog Id", PendingId)
@@ -1435,7 +1444,7 @@ function EventManager:ProcessBacklogEvents(t)
 			for ProcessedId, ProcessedApp in pairs(tEvents.tApplicationsProcessed) do
 				if ProcessedId == PendingId then
 				MsgTrigger = "PendingId already known, deleting." 
-				table.insert(tNeedsRemoval,PendingId) end
+				return end
 
 				for EventId, Event in pairs(tEvents) do
 					if EventId == PendingId then
@@ -1453,11 +1462,11 @@ function EventManager:ProcessBacklogEvents(t)
 				end
 				if bSame then 
 					MsgTrigger = "Attendee's status and roles have not changed, ignoring."
-					table.insert(tNeedsRemoval,PendingId)
 					return end
 				end
 			else
 				attendee.Status = PendingEvent.BacklogStatus
+				Event.EventModified = os.time()
 				MsgTrigger = "A change to an attendee's status was made, processing."
 			end
 			MsgTrigger = "An attendee's role and status have changed, or this is a new attendee"
@@ -1467,56 +1476,57 @@ function EventManager:ProcessBacklogEvents(t)
 				nSignUpTime = PendingEvent.nBacklogSignUpTime,
 				Status = PendingEvent.BacklogStatus,
 				Roles = PendingEvent.BacklogRoles})
-
+			Event.EventModified = os.time
+			
 		end
+	
 	end
 end
 end
 end
 else
-	table.insert(tNeedsRemoval,PendingId)
+	return 
 end
-SendVarToRover("Owner's Removal Table", tNeedsRemoval)
-for idx, id in ipairs(tNeedsRemoval) do
-	MsgTrigger = "Applications removed: "..#tNeedsRemoval
-
-	tEventsBacklog[id] = nil
-end
-return t, bNewMessages, nEventChanged
+return
 end
 end
-end
+end]]--
 
 
 
 
 
 
-function EventManager:ProcessMyEvents(t)
+function EventManager:ProcessMyBacklog()
 	local bNewMessages = false
-	local tReceived = t
 	local nEventChanged = 0
-	SendVarToRover("My event to process", tReceived)
-	if t.BacklogOwner == GameLib.GetPlayerUnit():GetName() then
+	if not tMsg then return end
+	SendVarToRover("My backlog to process", tMsg.tEventsBacklog)
+	if tEventsBacklog.BacklogOwner == GameLib.GetPlayerUnit():GetName() then
 		local tNeedsRemoval = {}
 		for PendingId, PendingEvent in pairs(tEventsBacklog) do
 			if PendingEvent.nBacklogExpirationTime > os.time() then
-		
-			for ProcessedId, ProcessedApp in pairs(tEvents.tApplicationsProcessed) do
-				if ProcessedId == PendingId then 
-					table.insert(tNeedsRemoval,PendingId)
-				else
-				tEvents[PendingEvent.EventId] = self:ProcessEvents(PendingEvent) 
+				for ProcessedId, ProcessedApp in pairs(tEvents.tApplicationsProcessed) do
+					if ProcessedId == PendingId then 
+						table.insert(tNeedsRemoval,PendingId)
+					else
+						return
+					end
+				end
+			else
+				tEventsBacklog[PendingId] = nil
+			end
 		end
+	else return
 	end
-end
-end
-end
-SendVarToRover("My Removal Table", tNeedsRemoval)
-for idx, id in ipairs(tNeedsRemoval) do
-	tEventsBacklog[id] = nil
-end
-return t, bNewMessages, nEventChanged
+	if tNeedsRemoval then 
+		SendVarToRover("My Removal Table", tNeedsRemoval)
+		for idx, id in ipairs(tNeedsRemoval) do
+			tEventsBacklog[id] = nil
+		end
+	else 
+	end
+	return
 end
 
 
@@ -1606,3 +1616,18 @@ end
 -----------------------------------------------------------------------------------------------
 local EventManagerInst = EventManager:new()
 EventManagerInst:Init()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1285,7 +1285,7 @@ function EventManager:ProcessLiveEvents(tMsg)
 				end
 			end
 			if LiveCopy == false then
-				table.insert(tEvents,tMsg.tEvents[IncomingId])
+				tEvents[IncomingId] = IncomingEvent
 			end
 		end
 		ProcessedCount = ProcessedCount + 1
@@ -1311,7 +1311,7 @@ function EventManager:ProcessBacklogEvents(tMsg)
 			end
 		end
 		if LogCopy == false then
-			table.insert(tEventsBacklog,tMsg.tEventsBacklog[IncomingId])
+			tEventsBacklog[IncomingId] = IncomingEvent
 		end
 	end
 

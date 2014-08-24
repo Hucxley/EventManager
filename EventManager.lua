@@ -824,42 +824,46 @@ function EventManager:AddItem(i)
 	tEventInfo.nCurrentDPS = 0
 	--SendVarToRover("Populated Items", tEvent)
 	for idx, player in pairs(tEventInfo.tCurrentAttendees) do
-		if player.Status == "Attending" or tEventInfo.tCurrentAttendees[idx].Status == "Attending" then
-			PlayerAttending = true
-			if player.Roles.Tank == 1 then 
-				tEventInfo.nCurrentTanks = tEventInfo.nCurrentTanks + 1
+		if player.Name == GameLib.GetPlayerUnit():GetName() then	
+			if player.Status == "Attending" or tEventInfo.tCurrentAttendees[idx].Status == "Attending" then
+				PlayerAttending = true
+				if player.Roles.Tank == 1 then 
+					tEventInfo.nCurrentTanks = tEventInfo.nCurrentTanks + 1
+				end
+				if player.Roles.Healer == 1 then
+					tEventInfo.nCurrentHealers = tEventInfo.nCurrentHealers + 1
+				end
+				if player.Roles.DPS == 1 then 
+					tEventInfo.nCurrentDPS = tEventInfo.nCurrentDPS + 1
+				end
+			elseif player.Status == "Declined" or tEventInfo.tCurrentAttendees[idx].Status == "Declined" then
+				PlayerAttending = false
+			elseif player.Status == "Pending" or tEventInfo.tCurrentAttendees[idx].Status == "Pending" then
+				PlayerAttending = "Pending"
+			else PlayerAttending = "unknown"
 			end
-			if player.Roles.Healer == 1 then
-				tEventInfo.nCurrentHealers = tEventInfo.nCurrentHealers + 1
-			end
-			if player.Roles.DPS == 1 then 
-				tEventInfo.nCurrentDPS = tEventInfo.nCurrentDPS + 1
-			end
-		elseif player.Status == "Declined" or tEventInfo.tCurrentAttendees[idx].Status == "Declined" then
-			PlayerAttending = false
-		elseif player.Status == "Pending" or tEventInfo.tCurrentAttendees[idx].Status == "Pending" then
-			PlayerAttending = "Pending"
-		else PlayerAttending = "unknown"
 		end
 	end
 
 	if tEventsBacklog then
 		for Id, log in pairs(tEventsBacklog) do
 			if log.EventId == tEvent.EventId then
-				if log.BacklogOwnerStatus == "Attending" then
-				PlayerAttending = "Pending"
-				if log.BacklogOwnerRoles.Tank == 1 then 
-					tEventInfo.nCurrentTanks = tEventInfo.nCurrentTanks + 1
-				end
-				if log.BacklogOwnerRoles.Healer == 1 then
-					tEventInfo.nCurrentHealers = tEventInfo.nCurrentHealers + 1
-				end
-				if log.BacklogOwnerRoles.DPS == 1 then 
-					tEventInfo.nCurrentDPS = tEventInfo.nCurrentDPS + 1
-				end
-				elseif log.BacklogOwnerStatus == "Declined" then
+				if log.BacklogOwner ==GameLib.GetPlayerUnit():GetName() then
+					if log.BacklogOwnerStatus == "Attending" then
 					PlayerAttending = "Pending"
-					else PlayerAttending = "Pending"
+					if log.BacklogOwnerRoles.Tank == 1 then 
+						tEventInfo.nCurrentTanks = tEventInfo.nCurrentTanks + 1
+					end
+					if log.BacklogOwnerRoles.Healer == 1 then
+						tEventInfo.nCurrentHealers = tEventInfo.nCurrentHealers + 1
+					end
+					if log.BacklogOwnerRoles.DPS == 1 then 
+						tEventInfo.nCurrentDPS = tEventInfo.nCurrentDPS + 1
+					end
+					elseif log.BacklogOwnerStatus == "Declined" then
+						PlayerAttending = "Pending"
+						else PlayerAttending = "Pending"
+					end
 				end
 			end
 		end
@@ -1267,28 +1271,27 @@ function EventManager:ProcessLiveEvents(tMsg)
 	local tMsg = tMsg
 	local LiveCopy 
 
-		LiveCopy = false
-		for IncomingId, IncomingEvent in pairs(tMsg.tEvents) do
-			if IncomingEvent.Owner ~= GameLib.GetPlayerUnit():GetName() then
-				--SendVarToRover("Pending Live Id", IncomingId)
-				--SendVarToRover("Pending Live Event",IncomingEvent)
-				for LiveId, LiveEvent in pairs(tEvents) do
-					if IncomingId == LiveId then
-						LiveCopy = true 
-						if IncomingEvent.EventModified > LiveEvent.EventModified then
-							LiveCopy = false
-						else
-						end
+	LiveCopy = false
+	for IncomingId, IncomingEvent in pairs(tMsg.tEvents) do
+		if IncomingEvent.Owner ~= GameLib.GetPlayerUnit():GetName() then
+			--SendVarToRover("Pending Live Id", IncomingId)
+			--SendVarToRover("Pending Live Event",IncomingEvent)
+			for LiveId, LiveEvent in pairs(tEvents) do
+				if IncomingId == LiveId then
+					LiveCopy = true 
+					if IncomingEvent.EventModified > LiveEvent.EventModified then
+						LiveCopy = false
 					end
 				end
 			end
-		if LiveCopy == false then
-			table.insert(tEvents,tMsg.tEvents[IncomingId])
+			if LiveCopy == false then
+				table.insert(tEvents,tMsg.tEvents[IncomingId])
+			end
 		end
 		ProcessedCount = ProcessedCount + 1
-		end
-		--SendVarToRover("Processed tEvents", ProcessedCount)
 	end
+	--SendVarToRover("Processed tEvents", ProcessedCount)
+end
 	
 
 function EventManager:ProcessBacklogEvents(tMsg)
@@ -1305,7 +1308,6 @@ function EventManager:ProcessBacklogEvents(tMsg)
 		for CurrentLogId, CurrentLog in pairs(tEventsBacklog) do
 			if CurrentLogId == IncomingId then 
 				LogCopy = true
-
 			end
 		end
 		if LogCopy == false then
@@ -1319,16 +1321,16 @@ function EventManager:ProcessBacklogEvents(tMsg)
 		else
 			DuplicateApp = false
 			for PendingId, PendingEvent in pairs(tMsg.tEventsBacklog) do
-			if LiveEventId ~= PendingEvent.EventId then
-		else
+				if LiveEventId ~= PendingEvent.EventId then
+				else
 				--SendVarToRover("PendingEvent",PendingEvent)
 				-- compare processed apps with pending apps
-				for idx, App in pairs(LiveEvent.Detail.tApplicationsProcessed) do
+					for idx, App in pairs(LiveEvent.Detail.tApplicationsProcessed) do
 						--SendVarToRover("App", App)
 						if App == PendingId then
 						DuplicateApp = true
 						-- event has been processed before
-					end
+						end
 				end
 
 				if DuplicateApp == false then

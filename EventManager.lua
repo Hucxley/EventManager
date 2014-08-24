@@ -28,9 +28,10 @@ local nBacklogCreationTime = 0
 local ProcessDupe = false
 local nEventId = nil
 local count = 0
-local MsgTrigger = ""
+MsgTrigger = ""
 local MajorVersionRewrite = false
 local ShowMajorVersionWarning = false
+local MessageToSend = false
 
 local setmetatable = setmetatable
 local Apollo = Apollo
@@ -154,98 +155,98 @@ function EventManager:OnDocLoaded()
 			return
 		end
 		
-		-- item list
-		self.wndItemList = self.wndMain:FindChild("ItemList")
-		self.wndMain:Show(false, true)
-		-- New event form
-		self.wndNewEvent = Apollo.LoadForm(self.xmlDoc,"NewEventForm",self.wndMain,self)
-		self.wndNewEvent:Show(false)
-		
-		-- Event Signup Form
-		self.wndSignUp = Apollo.LoadForm(self.xmlDoc,"SignUpForm",self.wndMain,self)
-		self.wndSignUp:Show(false)
-		
-		-- Options Form
-		self.wndOptions = Apollo.LoadForm(self.xmlDoc,"OptionsForm",self.wndMain,self)
-		self.wndOptions:Show(false)
-		
-		-- Delete Confirmation Warning Form
-		self.wndDeleteConfirm = Apollo.LoadForm(self.xmlDoc,"DeleteEventConfirmationWarning",nil,self)
-		self.wndDeleteConfirm:Show(false)
-		
-		-- Selected Item Detailed Info Form
-		self.wndSelectedListItemDetail = Apollo.LoadForm(self.xmlDoc,"EventDetailForm",self.wndMain,self)
-		self.wndSelectedListItemDetail:Show(false)
+	-- item list
+	self.wndItemList = self.wndMain:FindChild("ItemList")
+	self.wndMain:Show(false, true)
+	-- New event form
+	self.wndNewEvent = Apollo.LoadForm(self.xmlDoc,"NewEventForm",self.wndMain,self)
+	self.wndNewEvent:Show(false)
+	
+	-- Event Signup Form
+	self.wndSignUp = Apollo.LoadForm(self.xmlDoc,"SignUpForm",self.wndMain,self)
+	self.wndSignUp:Show(false)
+	
+	-- Options Form
+	self.wndOptions = Apollo.LoadForm(self.xmlDoc,"OptionsForm",self.wndMain,self)
+	self.wndOptions:Show(false)
+	
+	-- Delete Confirmation Warning Form
+	self.wndDeleteConfirm = Apollo.LoadForm(self.xmlDoc,"DeleteEventConfirmationWarning",nil,self)
+	self.wndDeleteConfirm:Show(false)
+	
+	-- Selected Item Detailed Info Form
+	self.wndSelectedListItemDetail = Apollo.LoadForm(self.xmlDoc,"EventDetailForm",self.wndMain,self)
+	self.wndSelectedListItemDetail:Show(false)
 
-		-- Edit Item Form
-		self.wndEditEvent = Apollo.LoadForm(self.xmlDoc,"EditEventForm", self.wndMain,self)
-		self.wndEditEvent:Show(false)
+	-- Edit Item Form
+	self.wndEditEvent = Apollo.LoadForm(self.xmlDoc,"EditEventForm", self.wndMain,self)
+	self.wndEditEvent:Show(false)
 
-		-- Major Version Warning Form
-		self.wndMajorVersionWarning = Apollo.LoadForm(self.xmlDoc,"MajorVersionWarning", nil, self)
-		self.wndMajorVersionWarning:Show(false)
-		
-		-- start add by Feyde
-		-- Security Form
-		self.wndSecurity = Apollo.LoadForm(self.xmlDoc,"SecurityForm",self.wndOptions,self)
-		self.wndSecurity:Show(false)
-		-- end add by Feyde
-		
-		-- if the xmlDoc is no longer needed, you should set it to nil
-		-- self.xmlDoc = nil
-		
-		-- Register handlers for events, slash commands and timer, etc.
-		-- e.g. Apollo.RegisterEventHandler("KeyDown", "OnKeyDown", self)
-		Apollo.RegisterSlashCommand("events",							"OnEventManagerOn",self)
-		--Apollo.RegisterSlashCommand("events", 							"OnEventManagerOn", self)
-		Apollo.RegisterEventHandler("WindowManagementReady", 			"OnWindowManagementReady", self)
-		Apollo.RegisterEventHandler("WindowMove",						"OnWindowMove", self)
-		self.timerDelay = ApolloTimer.Create(1, false, "OnDelayTimer", self)
+	-- Major Version Warning Form
+	self.wndMajorVersionWarning = Apollo.LoadForm(self.xmlDoc,"MajorVersionWarning", nil, self)
+	self.wndMajorVersionWarning:Show(false)
+	
+	-- start add by Feyde
+	-- Security Form
+	self.wndSecurity = Apollo.LoadForm(self.xmlDoc,"SecurityForm",self.wndOptions,self)
+	self.wndSecurity:Show(false)
+	-- end add by Feyde
+	
+	-- if the xmlDoc is no longer needed, you should set it to nil
+	-- self.xmlDoc = nil
+	
+	-- Register handlers for events, slash commands and timer, etc.
+	-- e.g. Apollo.RegisterEventHandler("KeyDown", "OnKeyDown", self)
+	Apollo.RegisterSlashCommand("events",							"OnEventManagerOn",self)
+	--Apollo.RegisterSlashCommand("events", 							"OnEventManagerOn", self)
+	Apollo.RegisterEventHandler("WindowManagementReady", 			"OnWindowManagementReady", self)
+	Apollo.RegisterEventHandler("WindowMove",						"OnWindowMove", self)
+	self.timerDelay = ApolloTimer.Create(1, false, "OnDelayTimer", self)
 
 
-		-- Do additional Addon initialization here
-		if MajorVersionRewrite ~= nil then
-			if MajorVersionRewrite ~= true or ShowMajorVersionWarning == true then
-				self.wndMajorVersionWarning:Show(true)
-			end
+	-- Do additional Addon initialization here
+	if MajorVersionRewrite ~= nil then
+		if MajorVersionRewrite ~= true or ShowMajorVersionWarning == true then
+			self.wndMajorVersionWarning:Show(true)
 		end
+	end
 
 
-		if tMetaData ~= nil then
-			tMetaData = tMetaData
-			tMetaData.nLatestUpdate = tMetaData.nLatestUpdate
-			if tMetaData.SyncChannel ~= "" or {} then 
-				EventsChan = ICCommLib.JoinChannel(tMetaData.SyncChannel, "OnEventManagerMessage", self)
-				Print("Events Manager: Joined sync channel "..tMetaData.SyncChannel)
-			end
-			
-		else
-			tMetaData = {nLatestUpdate = 0 ,SyncChannel = "" ,Passphrase = "",tSecurity = {},RequireSecureEvents = false}
+	if tMetaData ~= nil then
+		tMetaData = tMetaData
+		tMetaData.nLatestUpdate = tMetaData.nLatestUpdate
+		if tMetaData.SyncChannel ~= "" or {} then 
+			EventsChan = ICCommLib.JoinChannel(tMetaData.SyncChannel, "OnEventManagerMessage", self)
+			Print("Events Manager: Joined sync channel "..tMetaData.SyncChannel)
 		end
-		if tEvents ~= nil then
-			tEvents = tEvents
-			for key, EventId in pairs(tEvents) do
-				if EventId.Detail.tNotAttending == nil then
+		
+	else
+		tMetaData = {nLatestUpdate = 0 ,SyncChannel = "" ,Passphrase = "",tSecurity = {},RequireSecureEvents = false}
+	end
+	if tEvents ~= nil then
+		tEvents = tEvents
+		for key, EventId in pairs(tEvents) do
+			if EventId.Detail.tNotAttending == nil then
 				tEvents[key].Detail.tNotAttending = {}
 			end
 		end 
-		else tEvents = {}
-		end
+	else tEvents = {}
+	end
 
-		if tEventsBacklog ~= nil then 
-			tEventsBacklog = tEventsBacklog
-		else 
-			tEventsBacklog = {}
-		end
-		
-		-- start add by Feyde
-		if tSecurity ~= nil then
-			self.tSecurity = tSecurity
-		else
-			self.tSecurity = {}
-		end
-		-- end add by Feyde
-		
+	if tEventsBacklog ~= nil then 
+		tEventsBacklog = tEventsBacklog
+	else 
+		tEventsBacklog = {}
+	end
+	
+	-- start add by Feyde
+	if tSecurity ~= nil then
+		self.tSecurity = tSecurity
+	else
+		self.tSecurity = {}
+	end
+	-- end add by Feyde
+	
 	end
 	local SecurityList = self.tSecurity
 end
@@ -267,9 +268,6 @@ function EventManager:OnEventManagerOn()
 	end
 	MsgTrigger = "init"
 	self:EventsMessenger(MsgTrigger)
-	-- populate the item list
-	
-	--self:PopulateItemList(tEvents)
 	
 	-- start add by Feyde
 	-- populate the security list
@@ -319,7 +317,6 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 	--SendVarToRover("tEventsBacklog", tEventsBacklog)
 	--SendVarToRover("UpdateComparison",tMetaData.nLatestUpdate - tMsg.tMetaData.nLatestUpdate)
 	--SendVarToRover("MessageFlag", MessageToSend)
-	Print(tostring(tMetaData.nLatestUpdate > tMsg.tMetaData.nLatestUpdate))
 	if tMetaData.nLatestUpdate > tMsg.tMetaData.nLatestUpdate then
 		MsgTrigger = "tMetaUpdate > tMsgMetaUpdate"
 		MessageToSend = true
@@ -330,6 +327,7 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 	end
 	--Print("Incoming Message Processing Complete")
 	tMetaData.nLatestUpdate = os.time()
+	MessageToSend = false
 	self:PopulateItemList(tEvents)
 end
 
@@ -426,6 +424,7 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 	local NewBacklogEvent = {}
 	nSignUpTime = os.time()
 	local NewEventId = GameLib.GetRealmName()..GameLib.GetPlayerUnit():GetName()..os.time()
+	
 	NewEventEntry = {
 	EventId = NewEventId,
 	Owner = GameLib.GetPlayerUnit():GetName(),
@@ -457,49 +456,48 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 	EventModified = os.time(),
 	tApplicationsProcessed = {}
 	},
-	
-}
+	}
 		
-		if NewEventEntry.Detail.Hour > 12 then
-			NewEventEntry.Detail.Hour = NewEventEntry.Detail.Hour - 12
-			NewEventEntry.AmPm = "pm"
-		end
+	if NewEventEntry.Detail.Hour > 12 then
+		NewEventEntry.Detail.Hour = NewEventEntry.Detail.Hour - 12
+		NewEventEntry.AmPm = "pm"
+	end
 
-		NewEventEntry.nEventSortValue = self:CreateSortValue(NewEventEntry.Detail)
-		local CurrentLocalTime = os.time()
-		NewEventEntry.EventModified = os.time()
-		if NewEventEntry.nEventSortValue < CurrentLocalTime then
-			Print("Event Manager Error: New events cannot be created in the past.")
-			NewEventEntry = nil
-		end
-		--SendVarToRover("NewEventBacklogkey", NewEventEntry.EventId)
-		--SendVarToRover("NewEventvalue", NewEvent)
-		--SendVarToRover("NewEventBacksort", NewEventEntry.nEventSortValue)
-		--SendVarToRover("NewEventEntry", NewEventEntry)
-		if NewEventEntry ~= nil then
-			tEvents[NewEventId] = NewEventEntry
-			MsgTrigger = "New Event Created, Creating Backlog Event for Event Owner"
-			BacklogId = GameLib.GetRealmName()..GameLib.GetPlayerUnit():GetName()..os.time()
-			for NewEventId, NewEvent in pairs(NewEventEntry) do
-				
-				tEventsBacklog[BacklogId] = {		
-				EventId = NewEventEntry.EventId,
-				strEventStatus = NewEventEntry.strEventStatus,
-				EventSyncChannel = NewEventEntry.EventSyncChannel,
-				BacklogID = BacklogId,
-				BacklogOwner = GameLib.GetPlayerUnit():GetName(),
-				BacklogOwnerStatus = "Attending",
-				BacklogOwnerRoles = self:GetSelectedRoles(self.wndNewEvent:FindChild("TankRoleButton"):IsChecked()
-					,self.wndNewEvent:FindChild("HealerRoleButton"):IsChecked()
-					,self.wndNewEvent:FindChild("DPSRoleButton"):IsChecked()),
-				nBacklogCreationTime = nSignUpTime,
-				nBacklogExpirationTime = NewEventEntry.nEventSortValue,
-			}
+	NewEventEntry.nEventSortValue = self:CreateSortValue(NewEventEntry.Detail)
+	local CurrentLocalTime = os.time()
+	NewEventEntry.EventModified = os.time()
+	if NewEventEntry.nEventSortValue < CurrentLocalTime then
+		Print("Event Manager Error: New events cannot be created in the past.")
+		NewEventEntry = nil
+	end
+	--SendVarToRover("NewEventBacklogkey", NewEventEntry.EventId)
+	--SendVarToRover("NewEventvalue", NewEvent)
+	--SendVarToRover("NewEventBacksort", NewEventEntry.nEventSortValue)
+	--SendVarToRover("NewEventEntry", NewEventEntry)
+	if NewEventEntry ~= nil then
+		tEvents[NewEventId] = NewEventEntry
+		MsgTrigger = "New Event Created, Creating Backlog Event for Event Owner"
+		BacklogId = GameLib.GetRealmName()..GameLib.GetPlayerUnit():GetName()..os.time()
+		for NewEventId, NewEvent in pairs(NewEventEntry) do
+			
+			tEventsBacklog[BacklogId] = {		
+			EventId = NewEventEntry.EventId,
+			strEventStatus = NewEventEntry.strEventStatus,
+			EventSyncChannel = NewEventEntry.EventSyncChannel,
+			BacklogID = BacklogId,
+			BacklogOwner = GameLib.GetPlayerUnit():GetName(),
+			BacklogOwnerStatus = "Attending",
+			BacklogOwnerRoles = self:GetSelectedRoles(self.wndNewEvent:FindChild("TankRoleButton"):IsChecked()
+				,self.wndNewEvent:FindChild("HealerRoleButton"):IsChecked()
+				,self.wndNewEvent:FindChild("DPSRoleButton"):IsChecked()),
+			nBacklogCreationTime = nSignUpTime,
+			nBacklogExpirationTime = NewEventEntry.nEventSortValue,
+		}
 
 
-			MsgTrigger = "NewBacklogCreated"
-			--SendVarToRover("NewEventBacklogDetail", tEventsBacklog[NewEventEntry.EventId])
-			--SendVarToRover("NewEventBacklog", tEventsBacklog[NewEventEntry.EventId])
+		MsgTrigger = "NewBacklogCreated"
+		--SendVarToRover("NewEventBacklogDetail", tEventsBacklog[NewEventEntry.EventId])
+		--SendVarToRover("NewEventBacklog", tEventsBacklog[NewEventEntry.EventId])
 		end
 		
 	end
@@ -537,23 +535,22 @@ function EventManager:OnEditEventFormOn(wndHandler, wndControl, eMouseButton)
 	wnd:FindChild("EventDescriptionBox"):SetText(SelectedEventData.Detail.Description)
 
 	for idx, player in pairs(tEvents[SelectedEventId].Detail.tCurrentAttendees) do
-	if player.Name == GameLib.GetPlayerUnit():GetName() then
-		if player.Roles.Tank == 1 then
-			wnd:FindChild("TankRoleButton"):SetCheck(true)
+		if player.Name == GameLib.GetPlayerUnit():GetName() then
+			if player.Roles.Tank == 1 then
+				wnd:FindChild("TankRoleButton"):SetCheck(true)
+			end
+			if player.Roles.Healer == 1 then
+				wnd:FindChild("HealerRoleButton"):SetCheck(true)
+			end
+			if player.Roles.DPS == 1 then
+				wnd:FindChild("DPSRoleButton"):SetCheck(true)
+			end
 		end
-		if player.Roles.Healer == 1 then
-			wnd:FindChild("HealerRoleButton"):SetCheck(true)
-		end
-		if player.Roles.DPS == 1 then
-			wnd:FindChild("DPSRoleButton"):SetCheck(true)
-		end
+		
 	end
-	
-end
 
-self.wndEditEvent:SetData(SelectedEventData)
-
-self.wndEditEvent:Show(true)
+	self.wndEditEvent:SetData(SelectedEventData)
+	self.wndEditEvent:Show(true)
 
 end
 
@@ -586,32 +583,31 @@ function EventManager:OnEventEditSubmit(wndHandler,wndControl,eMouseButton)
 		tApplicationsProcessed = EditedEvent.Detail.tApplicationsProcessed,
 	}	
 
-
-	tEvents[EditedId].strEventStatus = EditedEvent.strEventStatus
-	tEvents[EditedId].EventModified = os.time()
-	if tEvents[EditedId].Detail.Hour > 12 then 
-		tEvents[EditedId].Detail.Hour = tEvents[EditedId].Detail.Hour - 12
-		tEvents[EditedId].Detail.AmPm = "pm"
+		tEvents[EditedId].strEventStatus = EditedEvent.strEventStatus
+		tEvents[EditedId].EventModified = os.time()
+		if tEvents[EditedId].Detail.Hour > 12 then 
+			tEvents[EditedId].Detail.Hour = tEvents[EditedId].Detail.Hour - 12
+			tEvents[EditedId].Detail.AmPm = "pm"
+		end
+		tEvents[EditedId].nEventSortValue = self:CreateSortValue(tEvents[EditedId].Detail)
+		if tEvents[EditedId].nEventSortValue < os.time() then
+			Print("Event Manager error: Events cannot be edited to occur in the past.")
+			tEvents[EditedId] = EditedEvent
+		end	
+		
+		for idx, player in pairs (EditedEvent.Detail.tCurrentAttendees) do
+			if player.Name == GameLib.GetPlayerUnit():GetName() then
+				player.Roles = self:GetSelectedRoles(wndEdit:FindChild("TankRoleButton"):IsChecked(),
+					wndEdit:FindChild("HealerRoleButton"):IsChecked(),
+					wndEdit:FindChild("DPSRoleButton"):IsChecked())
+			end
+		end
 	end
-	tEvents[EditedId].nEventSortValue = self:CreateSortValue(tEvents[EditedId].Detail)
-	if tEvents[EditedId].nEventSortValue < os.time() then
-		Print("Event Manager error: Events cannot be edited to occur in the past.")
-		tEvents[EditedId] = EditedEvent
-	end	
-	
-	for idx, player in pairs (EditedEvent.Detail.tCurrentAttendees) do
-	if player.Name == GameLib.GetPlayerUnit():GetName() then
-		player.Roles = self:GetSelectedRoles(wndEdit:FindChild("TankRoleButton"):IsChecked(),
-			wndEdit:FindChild("HealerRoleButton"):IsChecked(),
-			wndEdit:FindChild("DPSRoleButton"):IsChecked())
-	end
-end
-end
-self.wndEditEvent:Show(false)
-MsgTrigger = "Event Edited by owner"
-self:EventsMessenger(MsgTrigger)
-tMetaData.nLatestUpdate = os.time()
-self:PopulateItemList(tEvents)	
+	self.wndEditEvent:Show(false)
+	MsgTrigger = "Event Edited by owner"
+	self:EventsMessenger(MsgTrigger)
+	tMetaData.nLatestUpdate = os.time()
+	self:PopulateItemList(tEvents)	
 end
 
 
@@ -651,7 +647,6 @@ function EventManager:OnSignUpSubmit(wndHandler, wndControl, eMouseButton)
 	nSignUpTime = os.time()
 	local tNewAttendeeInfo = {{Name = GameLib.GetPlayerUnit():GetName(),Status = "Attending", nSignUpTime = nSignUpTime, 
 	Roles = self:GetSelectedRoles(bSignUpTank ,bSignUpHealer ,bSignUpDPS )}}
-
 	BacklogId = GameLib.GetRealmName()..GameLib.GetPlayerUnit():GetName()..os.time()
 
 	tEventsBacklog[BacklogId] = {		
@@ -671,9 +666,6 @@ function EventManager:OnSignUpSubmit(wndHandler, wndControl, eMouseButton)
 	
 	--SendVarToRover("Sign Up Backlog created",tEventsBacklog[SelectedEvent])
 	MsgTrigger = "New attendee added to backlog for this event."
-
-
-	
 
 	Print("Sign Up Completed for "..EventName)
 	self:PopulateItemList(tEvents)
@@ -770,12 +762,7 @@ function EventManager:OnDeleteConfirmation(wndHandler, wndControl, eMouseButton)
 	self:EventsMessenger(MsgTrigger)
 	tMetaData.nLatestUpdate = os.time()
 	self:PopulateItemList(tEvents)
-
-
 end
-
-
-
 
 -----------------------------------------------------------------------------------------------
 -- ItemList Functions
@@ -789,15 +776,16 @@ function EventManager:PopulateItemList(list)
 	list = self:CleanTable()
 	if list == nil then return
 	else 
-	    -- add 20 items
-	    for Event, EventId in pairs(list) do
-	    	self:AddItem(Event)
-	    	
-	    end
-	    self.wndItemList:ArrangeChildrenVert(0,SortListItems)
-	 end
+    -- add 20 items
+    for Event, EventId in pairs(list) do
+    	self:AddItem(Event)
+    	
+    end
+    self.wndItemList:ArrangeChildrenVert(0,SortListItems)
+ end
 
-	end
+end
+
 
 -- add an item into the item list
 function EventManager:AddItem(i)
@@ -930,8 +918,8 @@ function EventManager:AddItem(i)
 		end
 		local AttendeeList = {"Signed up for Event: \n \n"}
 		for key, name in pairs(tEventInfo.tCurrentAttendees) do
-		AttendeeList = {tEventInfo.tCurrentAttendees[key].Name}
-	end
+			table.insert(AttendeeList,tEventInfo.tCurrentAttendees[key].Name)
+		end
 	wnd:SetData(tEvent)
 	wnd:SetTooltip(table.concat(AttendeeList, '\n'))
 end
@@ -967,74 +955,76 @@ function EventManager:OnListItemSelected(wndHandler, wndControl)
 	self.wndSelectedListItemDetail:SetData(SelectedEventData)
 
    	-- if new selected item is canceled, dump and hold for new item selection
-   	if SelectedEvent.strEventStatus == "Canceled" then
-   		self.wndSelectedListItemDetail:Show(false)
-   		return
-   	end
+   if SelectedEvent.strEventStatus == "Canceled" then
+   	self.wndSelectedListItemDetail:Show(false)
+   	return
+   end
 	-- else continue populating item data.
 	local tAttendingSelectedItem = {}
 	local tNotAttendingSelectedItem = {}
 	for key, player in pairs(selectedItemText.tCurrentAttendees) do
-	if selectedItemText.tCurrentAttendees[key].Status == "Attending" then
-	tAttendingSelectedItem = {player.Name.." ("
-		..player.Roles.Tank.."/"..player.Roles.Healer.."/"
-		..player.Roles.DPS..")"}
-elseif player.Status == "Declined" then
-	tNotAttendingSelectedItem = {player.Name}
-else
-end
-end
---SendVarToRover("SelectedEvent",SelectedEvent)
-for key, event in pairs(tEvents) do
-		if SelectedEvent.Owner == event.Owner then --GameLib.GetPlayerUnit():GetName() then
+		if selectedItemText.tCurrentAttendees[key].Status == "Attending" then
+			table.insert(tAttendingSelectedItem, player.Name.." ("
+			..player.Roles.Tank.."/"..player.Roles.Healer.."/"
+			..player.Roles.DPS..")")
+		elseif player.Status == "Declined" then
+			table.insert(tNotAttendingSelectedItem, player.Name)
+		end
+	end
+
+	--SendVarToRover("tAttendingSelectedItem",tAttendingSelectedItem)
+	--SendVarToRover("tNotAttendingSelectedItem",tNotAttendingSelectedItem)
+	local AttendingSection = "Attending \n(Role(s) Selected: tank/healer/dps):\n \n"..table.concat(tAttendingSelectedItem,'\n').."\n \n"
+	local NotAttendingSection = "Not Attending:\n \n"..table.concat(tNotAttendingSelectedItem, '\n')
+	local DetailsAttendingText = ""									
+	if #tAttendingSelectedItem == 0 then
+		AttendingSection = ""
+	end
+	if #tNotAttendingSelectedItem == 0 then 
+		NotAttendingSection = ""
+	end
+	if #tAttendingSelectedItem + #tNotAttendingSelectedItem == 0 then
+		DetailsAttendingText = "Still waiting for attendance responses for this event."
+	else
+		DetailsAttendingText = AttendingSection..NotAttendingSection
+	end
+
+
+	--SendVarToRover("SelectedEvent",SelectedEvent)
+	for key, event in pairs(tEvents) do
+		if SelectedEvent.Owner == GameLib.GetPlayerUnit():GetName() then
 			self.wndSelectedListItemDetail:FindChild("EditEventButton"):Show(true)
 		else
 			self.wndSelectedListItemDetail:FindChild("EditEventButton"):Show(false)
 		end
+
 		local ShowSignUpButton = true
 		for idx, player in pairs(SelectedEvent.Detail.tCurrentAttendees) do
 			if player.Name == GameLib.GetPlayerUnit():GetName() and player.Status == "Attending" then --GameLib.GetPlayerUnit():GetName() then
-			ShowSignUpButton = false
+				ShowSignUpButton = false
+			end
+		end
+		if ShowSignUpButton == true then
+			self.wndSelectedListItemDetail:FindChild("SignUpButton"):Show(true)
 		end
 	end
-	if ShowSignUpButton == false then
-		self.wndSelectedListItemDetail:FindChild("SignUpButton"):Show(false)
+
+	self.wndSelectedListItemDetail:FindChild("SelectedEventDescriptionBox"):SetText(selectedItemText.Description)
+	self.wndSelectedListItemDetail:FindChild("EventDetailsWindow"):SetText(selectedItemText.EventName.. ", created by: "..SelectedEvent.Owner..
+		"\nScheduled for: "..string.format("%02d",selectedItemText.Month).."/"..
+		string.format("%02d",selectedItemText.Day).."/"..selectedItemText.Year.." at "..
+		string.format("%02d",selectedItemText.Hour)..":"..string.format("%02d",selectedItemText.Minute)..
+		" "..string.upper(selectedItemText.TimeZone).."\n \nThere are currently "..selectedItemText.nCurrentTanks.."/"..
+		selectedItemText.MaxTanks.." Tanks, "..selectedItemText.nCurrentHealers.."/"..selectedItemText.MaxHealers..
+		" Healers, and "..selectedItemText.nCurrentDPS.."/"..selectedItemText.MaxDps.." DPS signed up.")
+
+	self.wndSelectedListItemDetail:FindChild("DetailsAttendingBox"):SetText(DetailsAttendingText)
+	if SelectedEvent.strEventStatus ~= "Canceled" then
+		self.wndSelectedListItemDetail:Show(true)
+	else
+		self.wndSelectedListItemDetail:Show(false)
 	end
-end
-self.wndSelectedListItemDetail:FindChild("SelectedEventDescriptionBox"):SetText(selectedItemText.Description)
-self.wndSelectedListItemDetail:FindChild("EventDetailsWindow"):SetText(selectedItemText.EventName.. ", created by: "..SelectedEvent.Owner..
-	"\nScheduled for: "..string.format("%02d",selectedItemText.Month).."/"..
-	string.format("%02d",selectedItemText.Day).."/"..selectedItemText.Year.." at "..
-	string.format("%02d",selectedItemText.Hour)..":"..string.format("%02d",selectedItemText.Minute)..
-	" "..string.upper(selectedItemText.TimeZone).."\n \nThere are currently "..selectedItemText.nCurrentTanks.."/"..
-	selectedItemText.MaxTanks.." Tanks, "..selectedItemText.nCurrentHealers.."/"..selectedItemText.MaxHealers..
-	" Healers, and "..selectedItemText.nCurrentDPS.."/"..selectedItemText.MaxDps.." DPS signed up.")
-
-
-local AttendingSection = "Attending \n(Role(s) Selected: tank/healer/dps):\n \n"..table.concat(tAttendingSelectedItem,'\n').."\n \n"
-local NotAttendingSection = "Not Attending:\n \n"..table.concat(tNotAttendingSelectedItem, '\n')
-local DetailsAttendingText = ""									
-if #tAttendingSelectedItem == 0 then
-AttendingSection = ""
-end
-if #tNotAttendingSelectedItem == 0 then 
-NotAttendingSection = ""
-end
-if #tAttendingSelectedItem + #tNotAttendingSelectedItem == 0 then
-DetailsAttendingText = "Still waiting for attendance responses for this event."
-else
-	DetailsAttendingText = AttendingSection..NotAttendingSection
-end
---SendVarToRover("tAttendingSelectedItem",tAttendingSelectedItem)
---SendVarToRover("tNotAttendingSelectedItem",tNotAttendingSelectedItem)
-
-self.wndSelectedListItemDetail:FindChild("DetailsAttendingBox"):SetText(DetailsAttendingText)
-if SelectedEvent.strEventStatus ~= "Canceled" then
-	self.wndSelectedListItemDetail:Show(true)
-else
-	self.wndSelectedListItemDetail:Show(false)
-end
---SendVarToRover("SelectedEventData",SelectedEvent)										
+	--SendVarToRover("SelectedEventData",SelectedEvent)										
 end
 
 
@@ -1159,39 +1149,39 @@ function EventManager:OnDelayTimer()
 		
 		else self.timerDelay:Start()
 		end
-	end
+end
 
-	function EventManager:OnSecurityWhitelistShow(wndHandler, wndControl, eMouseButton)
-		if self.wndSecurity:IsShown() == false then
-			self.wndSecurity:Show(true)
-		else
-			self.wndSecurity:Show(false)
-		end
+function EventManager:OnSecurityWhitelistShow(wndHandler, wndControl, eMouseButton)
+	if self.wndSecurity:IsShown() == false then
+		self.wndSecurity:Show(true)
+	else
+		self.wndSecurity:Show(false)
 	end
+end
 
-	function EventManager:CreateSortValue(tEventDetail)
-		local Year = tEventDetail.Year
-		local Month = tEventDetail.Month
-		local Day = tEventDetail.Day
-		local Hour = tEventDetail.Hour
-		local Minute = tEventDetail.Minute
-		local AmPm = tEventDetail.AmPm
-		if AmPm == "pm" then
-			if Hour == 12 then 
-				else Hour = Hour + 12
-				end
-			else
-				if Hour == 12 then
-					Hour = 0
-				end
+function EventManager:CreateSortValue(tEventDetail)
+	local Year = tEventDetail.Year
+	local Month = tEventDetail.Month
+	local Day = tEventDetail.Day
+	local Hour = tEventDetail.Hour
+	local Minute = tEventDetail.Minute
+	local AmPm = tEventDetail.AmPm
+	if AmPm == "pm" then
+		if Hour == 12 then 
+			else Hour = Hour + 12
 			end
-			local nOSDate = tonumber(os.date(os.time{year = Year, month = Month, day = Day, hour = Hour, min = Minute,}))
-			return nOSDate
+		else
+			if Hour == 12 then
+				Hour = 0
+			end
 		end
+		local nOSDate = tonumber(os.date(os.time{year = Year, month = Month, day = Day, hour = Hour, min = Minute,}))
+		return nOSDate
+	end
 
-		function EventManager:get_timezone_offset(ts)
-			local utcdate   = os.date("!*t", ts)
-			local localdate = os.date("*t", ts)
+	function EventManager:get_timezone_offset(ts)
+		local utcdate   = os.date("!*t", ts)
+		local localdate = os.date("*t", ts)
 	localdate.isdst = false -- this is the trick
 	return tonumber(os.difftime(os.time(utcdate),os.time(localdate)))
 end
@@ -1247,17 +1237,17 @@ function EventManager:GetSelectedRoles(bTankRole,bHealerRole,bDPSRole)
 end
 
 function EventManager:CreateAttendeeInfo(Owner,time,Roles)
-local Roles = Roles
-local Owner = Owner
-local time = time
-local tCurrentAttendees = {}
-if not Roles.Tank and Roles.Healer and Roles.DPS then
-	tCurrentAttendees = {{Name = "", nSignUpTime = "", Roles = {},}}
-else
-	tCurrentAttendees = {{Name = Owner,nSignUpTime = time,
-	Roles = Roles}}		
-end
-return tCurrentAttendees
+	local Roles = Roles
+	local Owner = Owner
+	local time = time
+	local tCurrentAttendees = {}
+	if not Roles.Tank and Roles.Healer and Roles.DPS then
+		tCurrentAttendees = {{Name = "", nSignUpTime = "", Roles = {},}}
+	else
+		tCurrentAttendees = {{Name = Owner,nSignUpTime = time,
+		Roles = Roles}}		
+	end
+	return tCurrentAttendees
 end	
 
 function EventManager:OnWindowManagementReady()
@@ -1286,6 +1276,8 @@ function EventManager:ProcessLiveEvents(tMsg)
 			end
 			if LiveCopy == false then
 				tEvents[IncomingId] = IncomingEvent
+				MessageToSend = true
+				MsgTrigger = "Added another player's event to LiveEvents"
 			end
 		end
 		ProcessedCount = ProcessedCount + 1
@@ -1312,6 +1304,7 @@ function EventManager:ProcessBacklogEvents(tMsg)
 		end
 		if LogCopy == false then
 			tEventsBacklog[IncomingId] = IncomingEvent
+			MessageToSend = true
 		end
 	end
 
@@ -1325,58 +1318,65 @@ function EventManager:ProcessBacklogEvents(tMsg)
 				else
 				--SendVarToRover("PendingEvent",PendingEvent)
 				-- compare processed apps with pending apps
-					for idx, App in pairs(LiveEvent.Detail.tApplicationsProcessed) do
-						--SendVarToRover("App", App)
-						if App == PendingId then
+				for idx, App in pairs(LiveEvent.Detail.tApplicationsProcessed) do
+					--SendVarToRover("App", App)
+					if App == PendingId then
 						DuplicateApp = true
 						-- event has been processed before
-						end
+					end
 				end
 
 				if DuplicateApp == false then
-						--check known attendees to see if new attendee or role/status change
-						KnownAttendee = false
-						for idx,attendee in pairs(LiveEvent.Detail.tCurrentAttendees) do
-						if attendee.Name == PendingEvent.BacklogOwner then
-						KnownAttendee = true
-						AttendeeIdx = idx
+					--check known attendees to see if new attendee or role/status change
+					KnownAttendee = false
+					for idx,attendee in pairs(LiveEvent.Detail.tCurrentAttendees) do
+					if attendee.Name == PendingEvent.BacklogOwner then
+					KnownAttendee = true
+					AttendeeIdx = idx
+
+				end
+			end
+				--SendVarToRover("KnownAttendee",KnownAttendee)
+				-- attendee known, check status	
+				if KnownAttendee == true then
+					local attendee = LiveEvent.Detail.tCurrentAttendees[AttendeeIdx]
+					--SendVarToRover("Attendee",attendee)
+					if attendee.Status ~= PendingEvent.BacklogStatus then
+						--SendVarToRover("ApplicantStatusChanged", attendee.Status)
+						-- Applicant status/role change
+						attendee.Status = PendingEvent.BacklogOwnerStatus
+						attendee.Roles = PendingEvent.BacklogOwnerRoles
+						table.insert(LiveEvent.Detail.tApplicationsProcessed, PendingId)
+						LiveEvent.EventModified = os.time()
+						ProcessedCount = ProcessedCount + 1
+						MessageToSend = true
+						MsgTrigger = "Applicant's status changed."
 					end
 				end
-						--SendVarToRover("KnownAttendee",KnownAttendee)
-						-- attendee known, check status	
-						if KnownAttendee == true then
-						local attendee = LiveEvent.Detail.tCurrentAttendees[AttendeeIdx]
-							--SendVarToRover("Attendee",attendee)
-							if attendee.Status ~= PendingEvent.BacklogStatus then
-								--SendVarToRover("ApplicantStatusChanged", attendee.Status)
-								-- Applicant status/role change
-								attendee.Status = PendingEvent.BacklogOwnerStatus
-								attendee.Roles = PendingEvent.BacklogOwnerRoles
-								table.insert(LiveEvent.Detail.tApplicationsProcessed, PendingId)
-								LiveEvent.EventModified = os.time()
-							end
-						end
 
-						if KnownAttendee == false then
-							--SendVarToRover("NewAttendee",PendingEvent.BacklogOwner)
-							-- New Applicant, insert record
-							table.insert(LiveEvent.Detail.tCurrentAttendees,
-								{Name = PendingEvent.BacklogOwner,
-								nSignUpTime = PendingEvent.nBacklogSignUpTime,
-								Status = PendingEvent.BacklogOwnerStatus,
-								Roles = PendingEvent.BacklogOwnerRoles})
-							LiveEvent.EventModified = os.time()
-							table.insert(LiveEvent.Detail.tApplicationsProcessed, PendingId)
-						end
-					else
-					end
+				if KnownAttendee == false then
+					--SendVarToRover("NewAttendee",PendingEvent.BacklogOwner)
+					-- New Applicant, insert record
+					table.insert(LiveEvent.Detail.tCurrentAttendees,
+						{Name = PendingEvent.BacklogOwner,
+						nSignUpTime = PendingEvent.nBacklogCreationTime,
+						Status = PendingEvent.BacklogOwnerStatus,
+						Roles = PendingEvent.BacklogOwnerRoles})
+					LiveEvent.EventModified = os.time()
+					table.insert(LiveEvent.Detail.tApplicationsProcessed, PendingId)
+					MessageToSend = true
+					ProcessedCount = ProcessedCount + 1
+					MsgTrigger = "New Attendee added to event"
+				end
+			else
+			end
 			--SendVarToRover("DuplicateAppStatus",tostring(DuplicateApp))
 		end
 	end
 	end
 end
-ProcessedCount = ProcessedCount + 1
-	--SendVarToRover("Processed Backlog Events", ProcessedCount)
+
+--SendVarToRover("Processed Backlog Events", ProcessedCount)
 end
 
  
@@ -1407,6 +1407,7 @@ function EventManager:ProcessMyBacklog(tMsg)
 					end
 				else
 					tEventsBacklog[PendingId] = nil
+					MessageToSend = true
 				end
 			end
 			if tNeedsRemoval then 
@@ -1415,6 +1416,8 @@ function EventManager:ProcessMyBacklog(tMsg)
 					tEventsBacklog[id] = nil
 					--tMsg.tEventsBacklog[id] = nil
 				end
+				MsgTrigger = "Removed my backlogged events"
+				MessageToSend = true
 			end
 		end
 	end
@@ -1432,13 +1435,13 @@ function EventManager:OnMajorVersionConfirmation(wndHandler,wndControl,eMouseBut
 end
 
 function EventManager:ProcessAttendingCount(t)
-local nAttendeesCount = 0
-if t.Status == "Attending" then
-nAttendeesCount = nAttendeesCount + 1
-elseif t.Status == "Declined" then
-	nAttendeesCount = nAttendeesCount - 1
-end
-return nAttendeesCount
+	local nAttendeesCount = 0
+	if t.Status == "Attending" then
+		nAttendeesCount = nAttendeesCount + 1
+	elseif t.Status == "Declined" then
+		nAttendeesCount = nAttendeesCount - 1
+	end
+	return nAttendeesCount
 end
 
 
@@ -1459,7 +1462,7 @@ else
 	self.wndOptions:FindChild("EnableSecureEventsButton"):SetCheck(false)
 	--self.wndOptions:FindChild("ShowSecurityWhitelist"):Show(false)
 end
-self.wndOptions:Show(true)
+	self.wndOptions:Show(true)
 end
 
 function EventManager:OnOptionsSubmit (wndHandler, wndControl, eMouseButton)

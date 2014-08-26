@@ -1318,17 +1318,11 @@ function EventManager:ProcessBacklogEvents(tMsg)
 	local DuplicateApp
 	local LogCopy
 
-	LogCopy = false
+
 	for IncomingId, IncomingEvent in pairs(tMsg.tEventsBacklog) do
-		
-		for CurrentLogId, CurrentLog in pairs(tEventsBacklog) do
-			if CurrentLogId == IncomingId then 
-				LogCopy = true
-			end
-		end
-		if LogCopy == false then
-			tEventsBacklog[IncomingId] = IncomingEvent
-			MsgTrigger = "Added an external log to record."
+		if not tEventsBacklog[IncomingId] then 
+			tEventsBacklog[IncomingId] = IncomingEvent 
+			MsgTrigger = "Added an external log to the record."
 			MessageToSend = true
 		end
 	end
@@ -1339,8 +1333,7 @@ function EventManager:ProcessBacklogEvents(tMsg)
 		else
 			DuplicateApp = false
 			for PendingId, PendingEvent in pairs(tMsg.tEventsBacklog) do
-				if LiveEventId ~= PendingEvent.EventId then
-				else
+				if LiveEventId == PendingEvent.EventId then
 				--SendVarToRover("PendingEvent",PendingEvent)
 				-- compare processed apps with pending apps
 					for idx, App in pairs(LiveEvent.Detail.tApplicationsProcessed) do
@@ -1409,11 +1402,11 @@ function EventManager:ProcessMyBacklog(tMsg)
 	local bNewMessages = false
 	local nEventChanged = 0
 	local MyLogs = {}
-
+	local tNeedsRemoval = {}
+	
 	for LogId, log in pairs(tMsg) do
 		if log.BacklogOwner == GameLib.GetPlayerUnit():GetName() then
 			MyLogs[LogId] = log
-			local tNeedsRemoval = {}
 			--SendVarToRover("MyLogs",MyLogs)
 			for PendingId, PendingEvent in pairs(MyLogs) do
 				--SendVarToRover("My Pending Log", PendingEvent)
@@ -1441,7 +1434,7 @@ function EventManager:ProcessMyBacklog(tMsg)
 		end
 		
 	end
-	if tNeedsRemoval  then 
+	if #tNeedsRemoval > 0 then 
 		--SendVarToRover("My Removal Table", tNeedsRemoval)
 		MsgTrigger = "Removed my backlogged events"
 		MessageToSend = true

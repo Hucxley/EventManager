@@ -87,7 +87,7 @@ end
 function EventManager:Init()
 	local bHasConfigureFunction = false
 	local strConfigureButtonText = ""
-	local tDependencies = {GeminiTimer,
+	local tDependencies = {
 		-- "UnitOrPackageName",
 	}
 	Apollo.RegisterAddon(self, bHasConfigureFunction, strConfigureButtonText, tDependencies)
@@ -143,10 +143,7 @@ function EventManager:OnLoad()
    -- load our form file
   	self.xmlDoc = XmlDoc.CreateFromFile("EventManager.xml")
    self.xmlDoc:RegisterCallback("OnDocLoaded", self)
-  	--[[local APkg = Apollo.GetPackage("Gemini:Timer-1.0")
-  	GeminiTimer = APkg and APkg.tPackage or nil
-  	GeminiTimer:Embed(self)
-  	self:ScheduleRepeatingTimer("OnMsgTimer", 30)]]--
+
  end
 
 -----------------------------------------------------------------------------------------------
@@ -287,7 +284,7 @@ end
 function EventManager:OnMsgTimer()
 	--SendVarToRover("sync time value",timerCount+1)
 	timerCount = timerCount + 1
-  	if timerCount % 5 == 0 then
+  	if timerCount % 2 == 0 then
   		MsgTrigger = "Timer-triggered Sync"
     	self:EventsMessenger(MsgTrigger)
   	end
@@ -674,6 +671,7 @@ function EventManager:OnSignUpSubmit(wndHandler, wndControl, eMouseButton)
 	tEventsBacklog[BacklogId] = {		
 	EventId = SelectedEvent.EventId,
 	strEventStatus = SelectedEvent.strEventStatus,
+	EventName = SelectedEvent.Detail.EventName,
 	EventSyncChannel = SelectedEvent.EventSyncChannel,
 	BacklogID = BacklogId,
 	BacklogOwner = GameLib.GetPlayerUnit():GetName(),
@@ -1286,24 +1284,29 @@ function EventManager:ProcessLiveEvents(tMsg)
 	
 	for IncomingId, IncomingEvent in pairs(tMsg.tEvents) do
 		LiveCopy = false
+		if not tEvents[IncomingId] then 
+			tEvents[IncomingId] = IncomingEvent
+			MessageToSend = true
+			MessageTrigger = "Added another player's event to live event."
+		end
 
-		if IncomingEvent.Owner ~= GameLib.GetPlayerUnit():GetName() then
-			--SendVarToRover("Pending Live Id", IncomingId)
-			--SendVarToRover("Pending Live Event",IncomingEvent)
-			for LiveId, LiveEvent in pairs(tEvents) do
-				if IncomingId == LiveId then
-					LiveCopy = true 
-					if IncomingEvent.EventModified > LiveEvent.EventModified then
-						LiveCopy = false
-					end
+	if IncomingEvent.Owner ~= GameLib.GetPlayerUnit():GetName() then
+		--SendVarToRover("Pending Live Id", IncomingId)
+		--SendVarToRover("Pending Live Event",IncomingEvent)
+		for LiveId, LiveEvent in pairs(tEvents) do
+			if IncomingId == LiveId then
+				LiveCopy = true 
+				if IncomingEvent.EventModified > LiveEvent.EventModified then
+					LiveCopy = false
 				end
 			end
 		end
-		ProcessedCount = ProcessedCount + 1
 	end
-	--SendVarToRover("Processed tEvents", ProcessedCount)
+	ProcessedCount = ProcessedCount + 1
+	--SendVarToRover("Processed tEvents", ProcessedCount)	
 end
-	
+end
+
 
 function EventManager:ProcessBacklogEvents(tMsg)
 	local bNewMessages = false
@@ -1316,15 +1319,17 @@ function EventManager:ProcessBacklogEvents(tMsg)
 
 
 	for IncomingId, IncomingEvent in pairs(tMsg.tEventsBacklog) do
-		if not tEvents[IncomindId] then
-				tEvents[IncomingId] = IncomingEvent
+		if not tEventsBacklog[IncomindId] then
+				tEventsBacklog[IncomingId] = IncomingEvent
 				MessageToSend = true
 				MessageTrigger = "Added another player's event to Live Events"
 		else
+			
 			for LiveEventId, LiveEvent in pairs(tEvents) do
 				--SendVarToRover("LiveEvent", LiveEvent)
 				if LiveEvent.Owner ~= GameLib.GetPlayerUnit():GetName() then
 				else
+					
 					for PendingId, PendingEvent in pairs(tMsg.tEventsBacklog) do
 						DuplicateApp = false
 						if LiveEventId == PendingEvent.EventId then
@@ -1386,10 +1391,10 @@ function EventManager:ProcessBacklogEvents(tMsg)
 					end
 				end
 			end
-	--SendVarToRover("Processed Backlog Events", ProcessedCount)	
+			--SendVarToRover("Processed Backlog Events", ProcessedCount)	
+			end
 		end
 	end
-end
 end
 end
 

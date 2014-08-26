@@ -1319,7 +1319,7 @@ function EventManager:ProcessBacklogEvents(tMsg)
 
 
 	for IncomingId, IncomingEvent in pairs(tMsg.tEventsBacklog) do
-		if not tEventsBacklog[IncomindId] then
+		if not tEventsBacklog[IncomingId] then
 				tEventsBacklog[IncomingId] = IncomingEvent
 				MessageToSend = true
 				MessageTrigger = "Added another player's event to Live Events"
@@ -1346,57 +1346,59 @@ function EventManager:ProcessBacklogEvents(tMsg)
 
 							if DuplicateApp == false then
 								--check known attendees to see if new attendee or role/status change
-								KnownAttendee = false
+								
 								for idx,attendee in pairs(LiveEvent.Detail.tCurrentAttendees) do
+									KnownAttendee = false
 									if attendee.Name == PendingEvent.BacklogOwner then
 										KnownAttendee = true
 										AttendeeIdx = idx
-										break
+										--break
+									end
+								
+						
+									--SendVarToRover("KnownAttendee",KnownAttendee)
+									-- attendee known, check status	
+									if KnownAttendee == true then
+										local attendee = LiveEvent.Detail.tCurrentAttendees[idx]
+										--SendVarToRover("Attendee",attendee)
+										if attendee.Status ~= PendingEvent.BacklogOwnerStatus then
+											--SendVarToRover("ApplicantStatusChanged", attendee.Status)
+											-- Applicant status/role change
+											attendee.Status = PendingEvent.BacklogOwnerStatus
+											attendee.Roles = PendingEvent.BacklogOwnerRoles
+											table.insert(LiveEvent.Detail.tApplicationsProcessed, PendingId)
+											LiveEvent.EventModified = os.time()
+											ProcessedCount = ProcessedCount + 1
+											MessageToSend = true
+											MsgTrigger = "Applicant's status changed."
+										end
+									elseif KnownAttendee == false then
+										--SendVarToRover("NewAttendee",PendingEvent.BacklogOwner)
+										-- New Applicant, insert record
+										table.insert(LiveEvent.Detail.tCurrentAttendees,
+											{Name = PendingEvent.BacklogOwner,
+											nSignUpTime = PendingEvent.nBacklogCreationTime,
+											Status = PendingEvent.BacklogOwnerStatus,
+											Roles = PendingEvent.BacklogOwnerRoles})
+										LiveEvent.EventModified = os.time()
+										table.insert(LiveEvent.Detail.tApplicationsProcessed, PendingId)
+										MessageToSend = true
+										ProcessedCount = ProcessedCount + 1
+										MsgTrigger = "New Attendee added to event"
+									else
 									end
 								end
-						
-								--SendVarToRover("KnownAttendee",KnownAttendee)
-								-- attendee known, check status	
-								if KnownAttendee == true then
-									local attendee = LiveEvent.Detail.tCurrentAttendees[AttendeeIdx]
-									--SendVarToRover("Attendee",attendee)
-									if attendee.Status ~= PendingEvent.BacklogStatus then
-										--SendVarToRover("ApplicantStatusChanged", attendee.Status)
-										-- Applicant status/role change
-										attendee.Status = PendingEvent.BacklogOwnerStatus
-										attendee.Roles = PendingEvent.BacklogOwnerRoles
-										table.insert(LiveEvent.Detail.tApplicationsProcessed, PendingId)
-										LiveEvent.EventModified = os.time()
-										ProcessedCount = ProcessedCount + 1
-										MessageToSend = true
-										MsgTrigger = "Applicant's status changed."
-								else
-								if KnownAttendee == false then
-									--SendVarToRover("NewAttendee",PendingEvent.BacklogOwner)
-									-- New Applicant, insert record
-									table.insert(LiveEvent.Detail.tCurrentAttendees,
-										{Name = PendingEvent.BacklogOwner,
-										nSignUpTime = PendingEvent.nBacklogCreationTime,
-										Status = PendingEvent.BacklogOwnerStatus,
-										Roles = PendingEvent.BacklogOwnerRoles})
-									LiveEvent.EventModified = os.time()
-									table.insert(LiveEvent.Detail.tApplicationsProcessed, PendingId)
-									MessageToSend = true
-									ProcessedCount = ProcessedCount + 1
-									MsgTrigger = "New Attendee added to event"
-								end
 							end
+							--SendVarToRover("DuplicateAppStatus",tostring(DuplicateApp))
 						end
-						--SendVarToRover("DuplicateAppStatus",tostring(DuplicateApp))
 					end
 				end
-			end
 			--SendVarToRover("Processed Backlog Events", ProcessedCount)	
 			end
 		end
 	end
 end
-end
+
 
 
 
@@ -1408,6 +1410,7 @@ function EventManager:ProcessMyBacklog(tMsg)
 	local tNeedsRemoval = {}
 	
 	for LogId, log in pairs(tMsg) do
+		tNeedsRemoval = {}
 		if log.BacklogOwner == GameLib.GetPlayerUnit():GetName() then
 			MyLogs[LogId] = log
 			--SendVarToRover("MyLogs",MyLogs)

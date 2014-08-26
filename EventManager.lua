@@ -848,7 +848,7 @@ function EventManager:AddItem(i)
 					end
 					elseif log.BacklogOwnerStatus == "Declined" then
 						PlayerAttending = "Pending"
-						else PlayerAttending = "Pending"
+					else PlayerAttending = "Pending"
 					end
 				end
 			end
@@ -1033,7 +1033,7 @@ function EventManager:OnListItemSelected(wndHandler, wndControl)
 	self.wndSelectedListItemDetail:FindChild("EventDetailsWindow"):SetText(selectedItemText.EventName.. ", created by: "..SelectedEvent.Owner..
 		"\nScheduled for: "..string.format("%02d",selectedItemText.Month).."/"..
 		string.format("%02d",selectedItemText.Day).."/"..selectedItemText.Year.." at "..
-		string.format("%02d",selectedItemText.Hour)..":"..string.format("%02d",selectedItemText.Minute)..
+		string.format("%02d",selectedItemText.Hour)..":"..string.format("%02d",selectedItemText.Minute).." "..selectedItemText.AmPm..
 		" "..string.upper(selectedItemText.TimeZone).."\n \nThere are currently "..selectedItemText.nCurrentTanks.."/"..
 		selectedItemText.MaxTanks.." Tanks, "..selectedItemText.nCurrentHealers.."/"..selectedItemText.MaxHealers..
 		" Healers, and "..selectedItemText.nCurrentDPS.."/"..selectedItemText.MaxDps.." DPS signed up.")

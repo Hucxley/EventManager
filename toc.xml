@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Addon Author="OTG Addon Crew" APIVersion="9" Name="EventManager" Description="Event Manager and Calendar of sorts">
+    <Script Name="EventManager.lua"/>
+    <Script Name="GeminiTimer-1.0.lua"/>
+    <Form Name="EventManager.xml"/>
+</Addon>

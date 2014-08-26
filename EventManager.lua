@@ -191,7 +191,7 @@ function EventManager:OnDocLoaded()
 	-- Major Version Warning Form
 	self.wndMajorVersionWarning = Apollo.LoadForm(self.xmlDoc,"MajorVersionWarning", nil, self)
 	self.wndMajorVersionWarning:Show(false)
-
+	
 	-- start add by Feyde
 	-- Security Form
 	self.wndSecurity = Apollo.LoadForm(self.xmlDoc,"SecurityForm",self.wndOptions,self)
@@ -1487,10 +1487,10 @@ function EventManager:OnOptionsWindowShow (wndHandler, wndControl, eMouseButton)
 	if tMetaData.SecurityRequired == true then
 		self.wndOptions:FindChild("EnableSecureEventsButton"):SetCheck(true)
 	--self.wndOptions:FindChild("ShowSecurityWhitelist"):Show(true)
-	else
-		self.wndOptions:FindChild("EnableSecureEventsButton"):SetCheck(false)
-		--self.wndOptions:FindChild("ShowSecurityWhitelist"):Show(false)
-	end
+else
+	self.wndOptions:FindChild("EnableSecureEventsButton"):SetCheck(false)
+	--self.wndOptions:FindChild("ShowSecurityWhitelist"):Show(false)
+end
 	self.wndOptions:Show(true)
 end
 

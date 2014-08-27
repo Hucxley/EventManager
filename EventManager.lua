@@ -832,31 +832,7 @@ function EventManager:AddItem(i)
 	tEventInfo.nCurrentHealers = 0
 	tEventInfo.nCurrentDPS = 0
 	--SendVarToRover("Populated Items", tEvent)
-	if tEventsBacklog then
-		for Id, log in pairs(tEventsBacklog) do
-			if log.EventId == tEvent.EventId then
-				if log.BacklogOwner ==GameLib.GetPlayerUnit():GetName() then
-					if log.BacklogOwnerStatus == "Attending" then
-					PlayerAttending = "Pending"
-					if log.BacklogOwnerRoles.Tank == 1 then 
-						tEventInfo.nCurrentTanks = tEventInfo.nCurrentTanks + 1
-					end
-					if log.BacklogOwnerRoles.Healer == 1 then
-						tEventInfo.nCurrentHealers = tEventInfo.nCurrentHealers + 1
-					end
-					if log.BacklogOwnerRoles.DPS == 1 then 
-						tEventInfo.nCurrentDPS = tEventInfo.nCurrentDPS + 1
-					end
-					elseif log.BacklogOwnerStatus == "Declined" then
-						PlayerAttending = "Pending"
-					else PlayerAttending = "Pending"
-					end
-				end
-			end
-		end
-	end
-
-	for idx, player in pairs(tEventInfo.tCurrentAttendees) do
+		for idx, player in pairs(tEventInfo.tCurrentAttendees) do
 		if player.Name == GameLib.GetPlayerUnit():GetName() then	
 			if player.Status == "Attending" or tEventInfo.tCurrentAttendees[idx].Status == "Attending" then
 				PlayerAttending = true
@@ -874,15 +850,6 @@ function EventManager:AddItem(i)
 			elseif player.Status == "Pending" or tEventInfo.tCurrentAttendees[idx].Status == "Pending" then
 				PlayerAttending = "Pending"
 			else PlayerAttending = "unknown"
-			end
-		end
-	end
-
-	if tEventsBacklog == nil or {} then
-	else
-		for idx, attendee in pairs(tEventsBacklog[tEvent.EventId].tCurrentAttendees) do
-			if attendee.Name == GameLib.GetPlayerUnit():GetName() and attendee.Status == "Declined" then
-				PlayerAttending = false
 			end
 		end
 	end

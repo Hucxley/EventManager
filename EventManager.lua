@@ -209,7 +209,7 @@ function EventManager:OnDocLoaded()
 	Apollo.RegisterEventHandler("WindowManagementReady", 			"OnWindowManagementReady", self)
 	Apollo.RegisterEventHandler("WindowMove",						"OnWindowMove", self)
 	self.timerDelay = ApolloTimer.Create(1, false, "OnDelayTimer", self)
-	self.tTimer = ApolloTimer.Create(2, true, "OnMsgTimer", self)
+	self.tTimer = ApolloTimer.Create(30, true, "OnMsgTimer", self)
 
 
 

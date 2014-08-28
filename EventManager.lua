@@ -336,7 +336,7 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 	self:ProcessMyBacklog(tEventsBacklog)
 
 	MessageToSend = MessageToSend
-	Print(inspect(MessageToSend))
+	
 
 
 

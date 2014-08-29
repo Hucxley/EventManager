@@ -350,7 +350,7 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 	--SendVarToRover("tMetaData",tMetaData)
 	--SendVarToRover("tEventsBacklog", tEventsBacklog)
 	--SendVarToRover("UpdateComparison",tMetaData.nLatestUpdate - tMsg.tMetaData.nLatestUpdate)
-	SendVarToRover("MessageFlag", MessageToSend)
+	--SendVarToRover("MessageFlag", MessageToSend)
 
 	
 		tMetaData.nLatestUpdate = os.time()
@@ -403,9 +403,8 @@ function EventManager:CleanTable()
 		--SendVarToRover("CleaningKey", key)
 		--SendVarToRover("CleaningValue", EventId)
 		if Event.nEventSortValue < tonumber(os.time())-3600 then
-			LocalEvents[key] = nil
-		end
-		if Event.EventSyncChannel == tMetaData.SyncChannel then
+		
+		elseif Event.EventSyncChannel == tMetaData.SyncChannel then
 			LocalEvents[Event.EventId] = Event
 		end
 	end
@@ -1264,7 +1263,7 @@ function EventManager:ImportLiveEvents(EventsMsg)
 		for IncomingId, IncomingEvent in pairs(EventsMsg) do
 			NewEvent = true
 			if IncomingEvent.nEventSortValue < (os.time() - 3600) then
-				Print("Event is old by: "..(((IncomingEvent.nEventSortValue - (os.time()-3600))/3600)/24).."days")
+				--Print("Event is old by: "..(((IncomingEvent.nEventSortValue - (os.time()-3600))/3600)/24).."days")
 			else
 				for EventId, LocalEvent in pairs(tEvents) do
 					if IncomingId == EventId then
@@ -1278,9 +1277,9 @@ function EventManager:ImportLiveEvents(EventsMsg)
 			MessageTrigger = "Added another player's event to live event."
 			ProcessedCount = ProcessedCount + 1
 		end
-			SendVarToRover("Processed tEvents", ProcessedCount)
+			--SendVarToRover("Processed tEvents", ProcessedCount)
 	end
-	Print(ProcessedCount.." new events added from other players")
+	--Print(ProcessedCount.." new events added from other players")
 end
 
 
@@ -1290,21 +1289,24 @@ function EventManager:ImportBacklogEvents(BacklogMsg)
 
 	if not BacklogMsg then return end
 	for IncomingId, IncomingLog in pairs(BacklogMsg) do
-		NewLogEntry = true
-		for LogId, Log in pairs(tEventsBacklog) do
-			if IncomingId == LogId then 
-				NewLogEntry = false
+		NewLogEntry = false
+		if IncomingLog.nBacklogExpirationTime > (os.time()) then
+			NewLogEntry = true
+			for LogId, Log in pairs(tEventsBacklog) do
+				if IncomingId == LogId then 
+					NewLogEntry = false
+				end
 			end
+			if NewLogEntry == true then
+				--Print("Log does not exist, creating.")
+				tEventsBacklog[IncomingId] = IncomingLog
+				--Print("New log created for: "..IncomingLog.BacklogOwner)
+				MessageToSend = true
+				NewLogs = NewLogs + 1
+			end	
 		end
-		if NewLogEntry == true then
-			Print("Log does not exist, creating.")
-			tEventsBacklog[IncomingId] = IncomingLog
-			Print("New log created for: "..IncomingLog.BacklogOwner)
-			MessageToSend = true
-			NewLogs = NewLogs + 1
-		end	
 	end
-	Print(NewLogs)
+	--Print(NewLogs)
 end
 
 function EventManager:ProcessBacklogEvents(EventsBacklog)
@@ -1320,29 +1322,29 @@ function EventManager:ProcessBacklogEvents(EventsBacklog)
 
 	for LogId, Log in pairs(EventsBacklog) do
 		ItemToRemove = false
-		Print(Log.BacklogOwner)
+		--Print(Log.BacklogOwner)
 		if Log.nBacklogExpirationTime < (os.time() - 3600) then
 			ItemToRemove = true
-			Print("Log expired, deleting.")
+			--Print("Log expired, deleting.")
 		else
 			for tEventId, Event in pairs(tEvents) do
-				Print(tEventId)
-				Print(Log.EventId)
+				--Print(tEventId)
+				--Print(Log.EventId)
 				if Log.EventId == tEventId then
 					if Event.Detail.tApplicationsProcessed == 0 or {} then
 						LogCopy[LogId] = Log	
-						Print("Log Copy Added, nextLog") 
-						Print("No prior applications processed")
+						--Print("Log Copy Added, nextLog") 
+						--Print("No prior applications processed")
 						break
 					else
 						for idx, App in pairs(Event.Detail.tApplicationsProcessed) do
-							Print("LogId", LogId)
-							Print("App",App)
-							Print(LogId==App or "false")
+							--Print("LogId", LogId)
+							--Print("App",App)
+							--Print(LogId==App or "false")
 							if LogId == App then
 								--SendVarToRover("App", App)
 								ItemToRemove = true
-								Print("Already processed, deleting.")
+								--Print("Already processed, deleting.")
 							end
 						end
 					
@@ -1359,14 +1361,14 @@ function EventManager:ProcessBacklogEvents(EventsBacklog)
 
 	for LogCopyId, LogEvent in pairs(LogCopy) do
 		ItemToRemove = false
-		Print(LogCopyId)
+		--Print(LogCopyId)
 		for EventId, tEvent in pairs(tEvents) do
 			if LogEvent.EventId == EventId then
 				for idx, attendee in pairs(tEvent.Detail.tCurrentAttendees) do
-					Print(attendee.Name)
+					--Print(attendee.Name)
 					if LogEvent.BacklogOwner == attendee.Name then
 						if LogEvent.nBacklogCreationTime > attendee.nSignUpTime then
-							Print("New information for known attendee.")
+							--Print("New information for known attendee.")
 							attendee.Status = LogEvent.BacklogOwnerStatus
 							attendee.Roles = LogEvent.BacklogOwnerRoles
 							attendee.nSignUpTime = LogEvent.nBacklogCreationTime+1
@@ -1375,11 +1377,11 @@ function EventManager:ProcessBacklogEvents(EventsBacklog)
 							table.insert(tEvent.Detail.tApplicationsProcessed, LogCopyId)
 							MessageToSend = true
 						else
-							ItemToRemove = true
-							Print("Newer player information exists, removing.")
+							
+							--Print("Newer player information exists, removing.")
 						end
 					else
-						Print("New Applicant, insert record")
+						--Print("New Applicant, insert record")
 						table.insert(tEvent.Detail.tCurrentAttendees,
 							{Name = LogEvent.BacklogOwner,
 							nSignUpTime = LogEvent.nBacklogCreationTime,
@@ -1395,11 +1397,11 @@ function EventManager:ProcessBacklogEvents(EventsBacklog)
 		if ItemToRemove == true then
 			table.insert(tNeedsRemoval, LogCopyId)
 		end
-	Print("End of processing")	
+	--Print("End of processing")	
 	end
 	if #tNeedsRemoval > 0 then 
-		Print("needs removal table sees the light of day")
-		SendVarToRover("My Removal Table", tNeedsRemoval)
+		--Print("needs removal table sees the light of day")
+		--SendVarToRover("My Removal Table", tNeedsRemoval)
 		MsgTrigger = "Removed my backlogged events"
 		MessageToSend = true
 		local i = 0
@@ -1407,7 +1409,7 @@ function EventManager:ProcessBacklogEvents(EventsBacklog)
 			tEventsBacklog[id] = nil
 			i = i + 1
 		end
-		Print(i.." events processed from your backlog.")
+		--Print(i.." events processed from your backlog.")
 	end
 	--SendVarToRover("Events",tEvents)
 	--SendVarToRover("Backlog",tEventsBacklog)
@@ -1499,7 +1501,7 @@ function EventManager:ProcessMyBacklog(tMsg)
 		for idx, id in ipairs(tNeedsRemoval) do
 			local i = 1
 			tEventsBacklog[id] = nil
-			Print(i.." events processed from your backlog.")
+			--Print(i.." events processed from your backlog.")
 		end
 	end
 	if MessageToSend == true then
@@ -1557,7 +1559,7 @@ function EventManager:OnOptionsSubmit (wndHandler, wndControl, eMouseButton)
 	tMetaData.Passphrase = self.wndOptions:FindChild("PassphraseBox"):GetText()
 	tMetaData.SecurityRequired = self.wndOptions:FindChild("EnableSecureEventsButton"):IsChecked()
 	EventsChan = ICCommLib.JoinChannel(strSyncChannel, "OnEventManagerMessage", self)
-	--Print("Events Manager: Joined sync channel "..strSyncChannel)
+	----("Events Manager: Joined sync channel "..strSyncChannel)
 	wndControl:GetParent():Show(false)
 	MsgTrigger = "OptionsSubmitted"
 	self:EventsMessenger(MsgTrigger)

@@ -327,10 +327,15 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 		end
 	end
 
-
-	self:ImportLiveEvents(tMsg)
-	self:ImportBacklogEvents(tMsg.tEventsBacklog)
-	self:ProcessBacklogEvents(tEventsBacklog)
+	if tMsg then
+		self:ImportLiveEvents(tMsg)
+	end
+	if tMsg.tEventsBacklog then
+		self:ImportBacklogEvents(tMsg.tEventsBacklog)
+	end
+	if tEventsBacklog then
+		self:ProcessBacklogEvents(tEventsBacklog)
+	end
 	
 	--self:ProcessMyBacklog(tEventsBacklog)
 
@@ -1249,27 +1254,29 @@ function EventManager:OnWindowManagementReady()
 	Event_FireGenericEvent("WindowManagementAdd", {wnd = self.wndMain, strName = "Event Manager"})
 end
 
-function EventManager:ImportLiveEvents(tMsg)
+function EventManager:ImportLiveEvents(EventsMsg)
 	local ProcessedCount = 0
 	local NewEvent 
 
-	if not tMsg.tEvents then return end
-		for IncomingId, IncomingEvent in pairs(tMsg.tEvents) do
+	if not EventsMsg then return end
+		for IncomingId, IncomingEvent in pairs(EventsMsg) do
 			NewEvent = true
 			if IncomingEvent.nEventSortValue < (os.time() - 3600) then
 				Print("Event is old by: "..(((IncomingEvent.nEventSortValue - (os.time()-3600))/3600)/24).."days")
 			else
-				for EventId, Event in pairs(tEvents) do
-					if IncomingId == EventID then
+				for EventId, LocalEvent in pairs(tEvents) do
+					if IncomingId == EventId then
 						NewEvent = false
 					end
 				end
 			end
-		tEvents[IncomingId] = IncomingEvent
-		MessageToSend = true
-		MessageTrigger = "Added another player's event to live event."
-		ProcessedCount = ProcessedCount + 1
-		--SendVarToRover("Processed tEvents", ProcessedCount)
+		if NewEvent == true then
+			tEvents[IncomingId] = IncomingEvent
+			MessageToSend = true
+			MessageTrigger = "Added another player's event to live event."
+			ProcessedCount = ProcessedCount + 1
+		end
+			--SendVarToRover("Processed tEvents", ProcessedCount)
 	end
 	Print(ProcessedCount.." new events added from other players")
 end
@@ -1298,7 +1305,7 @@ function EventManager:ImportBacklogEvents(BacklogMsg)
 	Print(NewLogs)
 end
 
-function EventManager:ProcessBacklogEvents(tMsg)
+function EventManager:ProcessBacklogEvents(EventsBacklog)
 	local bNewMessages = false
 	local nEventChanged = 0
 	local KnownAttendee
@@ -1309,7 +1316,7 @@ function EventManager:ProcessBacklogEvents(tMsg)
 	local tNeedsRemoval = {}
 	local ItemToRemove = false
 
-	for LogId, Log in pairs(tEventsBacklog) do
+	for LogId, Log in pairs(EventsBacklog) do
 		ItemToRemove = false
 		Print(Log.BacklogOwner)
 		if Log.nBacklogExpirationTime < (os.time() - 3600) then

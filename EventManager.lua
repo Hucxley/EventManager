@@ -277,7 +277,7 @@ function EventManager:OnDocLoaded()
 	
 	end
 	local SecurityList = self.tSecurity
-	timerCount = 0
+	timerCount = 1
 	tCurrentDay = os.date("*t",os.time())
 	tDisplayedMonth = os.date("*t",os.time({year = tCurrentDay.year, month = tCurrentDay.month, day = 15, hour = 00}))
 	ViewingMonthHeader = {strMonth = os.date("%B", os.time(tDisplayedMonth)), nYear = os.date("%Y", os.time(tDisplayedMonth))}
@@ -768,6 +768,7 @@ function EventManager:OnSignUpSubmit(wndHandler, wndControl, eMouseButton)
 	
 	MsgTrigger = MsgTrigger
 	self:EventsMessenger(MsgTrigger)
+	self:PopulateItemList(tDisplayedEvents)
 end
 
 
@@ -808,7 +809,6 @@ function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
 
 
 	self:PopulateItemList(tDisplayedEvents)
-
 	self:EventsMessenger(MsgTrigger)
 end 
 

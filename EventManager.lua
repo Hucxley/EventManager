@@ -1,17 +1,17 @@
----
+-----------------------------------------------------------------------------------------------
 -- Client Lua Script for EventManager
 -- Wildstar Copyright (c) NCsoft. All rights reserved
 -- EventsManager written by Thoughtcrime.  All rights reserved
 -- Contribution for whitelist usecase credited to Feyed
----
+-----------------------------------------------------------------------------------------------
 
 require "Window"
 require "ICCommLib"
 require "ChatSystemLib"
 
----
+-----------------------------------------------------------------------------------------------
 -- EventManager Module Definition
----
+-----------------------------------------------------------------------------------------------
 local EventManager = {}    
 local tEvents = {}
 local tEventsBacklog = {}
@@ -34,6 +34,15 @@ local ShowMajorVersionWarning = false
 local MessageToSend = false
 local GeminiTimer
 local timerCount = 0
+local MajorVersionNumber = 7
+local tNeedsRemoval = {}
+local Calendar = {}
+local tCurrentDay = {}
+local tDisplayedMonth = {}
+local ViewingMonthHeader = {}
+local CalArray = {}
+local tDisplayedEvents = {}
+
 
 local setmetatable = setmetatable
 local Apollo = Apollo
@@ -50,15 +59,17 @@ local string = string
 local os = os
 local Event_FireGenericEvent = Event_FireGenericEvent
 local ChatSystemLib = ChatSystemLib
+local ItemToRemove
 
 
 
----
+-----------------------------------------------------------------------------------------------
 -- Constants
----
+-----------------------------------------------------------------------------------------------
 -- e.g. local kiExampleVariableMax = 999
 local kcrSelectedText = ApolloColor.new("UI_BtnTextHoloPressedFlyby")
 local kcrNormalText = ApolloColor.new("UI_BtnTextHoloNormal")
+local kcrDeadDaysText = ApolloColor.new("darkgray")
 
 local function SortArray(a,b)
 	return (a.v or 0) < (b.v or 0)
@@ -73,17 +84,19 @@ local function SortListItems(a,b)
 	local bEvent = b:GetData() 
 	return (aEvent.nEventSortValue or 0) < (bEvent.nEventSortValue or 0)
 end
----
+-----------------------------------------------------------------------------------------------
 -- Initialization
----
+-----------------------------------------------------------------------------------------------
 function EventManager:new(o)
 	o = o or {}
 	setmetatable(o, self)
 	self.__index = self 
 
     -- initialize variables here
-	o.tItems = {} -- keep track of all the list items
-	o.wndSelectedListItem = nil -- keep track of which list item is currently selected
+	o.tItems = {} -- keep track of all the event list items
+	o.CalendarItems = {} -- keep track of all of the calendar tiles
+	o.wndSelectedListItem = nil -- keep track of which event is currently selected
+	o.wndSelectedDate = nil -- keep track of list selected calendar date
 
 	return o
 end
@@ -105,11 +118,12 @@ function EventManager:OnSave(eLevel)
 		local tEventsBacklog = tEventsBacklog
 		local tMetaData = tMetaData
 		local MajorVersionRewrite = MajorVersionRewrite
+		local MajorVersionNumber = MajorVersionNumber
 		local tSecurity = self.tSecurity	-- added by Feyde
 
 		
 		
-		tSave = {tMetaData = tMetaData, tEvents = tEvents, tEventsBacklog = tEventsBacklog, Security = tSecurity, MajorVersionRewrite = MajorVersionRewrite}
+		tSave = {tMetaData = tMetaData, tEvents = tEvents, tEventsBacklog = tEventsBacklog, Security = tSecurity, MajorVersionRewrite = MajorVersionRewrite,MajorVersionNumber = MajorVersionNumber}
 
 		return tSave
 	end
@@ -130,19 +144,22 @@ function EventManager:OnRestore(eLevel,tSavedData)
 		end	
 		if tSavedData.tEventsBacklog ~= nil then
 			tEventsBacklog = tSavedData.tEventsBacklog
-			--SendVarToRover("tEventsBacklog",tEventsBacklog)
+			--------SendVarToRover("tEventsBacklog",tEventsBacklog)
 		end
 
 		if tSavedData.MajorVersionRewrite ~= nil then
 			MajorVersionRewrite = tSavedData.MajorVersionRewrite
 		end
+		if tSavedData.MajorVersionNumber == nil or tSavedData.MajorVersionNumber < MajorVersionNumber then
+			 ShowMajorVersionWarning = true
+		end
 	end
 end	
 
 
----
+-----------------------------------------------------------------------------------------------
 -- EventManager OnLoad
----
+-----------------------------------------------------------------------------------------------
 function EventManager:OnLoad()
    -- load our form file
   	self.xmlDoc = XmlDoc.CreateFromFile("EventManager.xml")
@@ -150,9 +167,9 @@ function EventManager:OnLoad()
 
  end
 
----
+-----------------------------------------------------------------------------------------------
 -- EventManager OnDocLoaded
----
+-----------------------------------------------------------------------------------------------
 function EventManager:OnDocLoaded()
 
 	if self.xmlDoc ~= nil and self.xmlDoc:IsLoaded() then
@@ -165,6 +182,10 @@ function EventManager:OnDocLoaded()
 	-- item list
 	self.wndItemList = self.wndMain:FindChild("ItemList")
 	self.wndMain:Show(false, true)
+
+	-- Calendar Grid
+	self.wndCalendar = self.wndMain:FindChild("CalendarGrid")
+	self.wndCalendar:Show(false,true)
 	-- New event form
 	self.wndNewEvent = Apollo.LoadForm(self.xmlDoc,"NewEventForm",self.wndMain,self)
 	self.wndNewEvent:Show(false)
@@ -226,7 +247,7 @@ function EventManager:OnDocLoaded()
 		tMetaData.nLatestUpdate = tMetaData.nLatestUpdate
 		if tMetaData.SyncChannel ~= "" or {} then 
 			EventsChan = ICCommLib.JoinChannel(tMetaData.SyncChannel, "OnEventManagerMessage", self)
-			--Print("Events Manager: Joined sync channel "..tMetaData.SyncChannel)
+			Print("Events Manager: Joined sync channel "..tMetaData.SyncChannel)
 		end
 		
 	else
@@ -254,12 +275,16 @@ function EventManager:OnDocLoaded()
 	end
 	local SecurityList = self.tSecurity
 	timerCount = 0
+	tCurrentDay = os.date("*t",os.time())
+	tDisplayedMonth = os.date("*t",os.time({year = tCurrentDay.year, month = tCurrentDay.month, day = 15, hour = 00}))
+	ViewingMonthHeader = {strMonth = os.date("%B", os.time(tDisplayedMonth)), nYear = os.date("%Y", os.time(tDisplayedMonth))}
+	Calendar = Apollo.GetPackage("TC:WSCalendar-1.0").tPackage
 end
 
 
------------------------------------------------------------
+-----------------------------------------------------------------------------------------------
 -- EventManager General Functions
------------------------------------------------------------
+-----------------------------------------------------------------------------------------------
 -- Define general functions here
 
 
@@ -273,7 +298,15 @@ function EventManager:OnEventManagerOn()
 			tEvents[key] = nil
 		end
 	end
-	self:PopulateItemList(tEvents)
+
+	CalArray = Calendar:BuildCalendarTable(tDisplayedMonth)
+
+	SendVarToRover("CalArray",CalArray)
+	self:ConstructCalendarGrid(CalArray)
+	local StartTime,EndTime = self:DefineFilterParams(tDisplayedMonth,"month")
+	tDisplayedEvents = self:FilterDisplayedEvents(tEvents,StartTime,EndTime)
+	self.wndCalendar:Show(true)
+	self:PopulateItemList(tDisplayedEvents)
 
 	
 	-- start add by Feyde
@@ -283,11 +316,13 @@ function EventManager:OnEventManagerOn()
 end
 
 function EventManager:OnMsgTimer()
-	--SendVarToRover("sync time value",timerCount+1)
+	--------SendVarToRover("sync time value",timerCount+1)
 	timerCount = timerCount + 1
   	if timerCount % 2 == 0 then
-  		MsgTrigger = "Timer-triggered Sync"
-    	self:EventsMessenger(MsgTrigger)
+  		if ShowMajorVersionWarning == false then
+	  		MsgTrigger = "Timer-triggered Sync"
+	    	self:EventsMessenger(MsgTrigger)
+		end
   	end
 end
 
@@ -299,19 +334,23 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 	local MessageToSend = false
 	local ModifiedTime = 0
 	local count = 0
-	--SendVarToRover("MsgReceived",tMsgReceived)
+	--------SendVarToRover("MsgReceived",tMsgReceived)
 
 	if tMsg == nil then 
 		return
-	elseif not tMsg.MajorVersionRewrite or tMsg.MajorVersionRewrite == nil then
-		ChatSystemLib.Command("/w"..strSender..", your Event Manager Client is out of date. Please visit http://wildstar.curseforge.com/ws-addons/223228-eventmanager to update.")
+	elseif tMsg.MajorVersionNumber == nil or tMsg.MajorVersionNumber < MajorVersionNumber then
+		ChatSystemLib.Command("/w"..strSender.." your Event Manager Client is out of date. Please visit http://wildstar.curseforge.com/ws-addons/223228-eventmanager to update.")
+		Print("Message rejected from "..strSender.." because they need to update their addon.  Politely let them know.")
 		return
-		elseif tMetaData.SyncChannel == tMsg.tMetaData.SyncChannel and tMsg.tMetaData.Passphrase ~= tMetaData.Passphrase then
-			--Print ("Your passphrase does not match the passphrase for this channel, please verify your information is correct.")
-			return
-		else 
-			if tMetaData.SecurityRequired ~= nil and tMetaData.SecurityRequired == true then 
-				if not self:AuthSender(strSender) then 
+	elseif not tMsg.MajorVersionRewrite or tMsg.MajorVersionRewrite == nil then
+	ChatSystemLib.Command("/w"..strSender..", your Event Manager Client is out of date. Please visit http://wildstar.curseforge.com/ws-addons/223228-eventmanager to update.")
+	return
+	elseif tMetaData.SyncChannel == tMsg.tMetaData.SyncChannel and tMsg.tMetaData.Passphrase ~= tMetaData.Passphrase then
+		------Print ("Your passphrase does not match the passphrase for this channel, please verify your information is correct.")
+		return
+	else 
+		if tMetaData.SecurityRequired ~= nil and tMetaData.SecurityRequired == true then 
+			if not self:AuthSender(strSender) then 
 				return
 			end 
 		end
@@ -346,11 +385,11 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 
 
 
-	--SendVarToRover("tEvents",tEvents)
-	--SendVarToRover("tMetaData",tMetaData)
-	--SendVarToRover("tEventsBacklog", tEventsBacklog)
-	--SendVarToRover("UpdateComparison",tMetaData.nLatestUpdate - tMsg.tMetaData.nLatestUpdate)
-	--SendVarToRover("MessageFlag", MessageToSend)
+	--------SendVarToRover("tEvents",tEvents)
+	--------SendVarToRover("tMetaData",tMetaData)
+	--------SendVarToRover("tEventsBacklog", tEventsBacklog)
+	--------SendVarToRover("UpdateComparison",tMetaData.nLatestUpdate - tMsg.tMetaData.nLatestUpdate)
+	------SendVarToRover("MessageFlag", MessageToSend)
 
 	
 		tMetaData.nLatestUpdate = os.time()
@@ -358,8 +397,9 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 		MsgTrigger = MsgTrigger
 		self:EventsMessenger(MsgTrigger)
 	end
-	--Print("Incoming Message Processing Complete")
+	------Print("Incoming Message Processing Complete")
 	self:PopulateItemList(tEvents)
+	self:ConstructCalendarGrid(CalArray)
 	MessageToSend = false
 
 end
@@ -369,7 +409,11 @@ end
 
 function EventManager:EventsMessenger(strTrigger)
 	local MessengerTrigger = strTrigger
-	--SendVarToRover("Message Trigger",MessengerTrigger)
+	if ShowMajorVersionWarning == true then 
+		Print("WARNING: You must update your EventsManager client before you can transmit data.")
+		return
+	end
+	--------SendVarToRover("Message Trigger",MessengerTrigger)
 	tMetaData = tMetaData
 	local tEvents = tEvents
 	local tEventsBacklog = tEventsBacklog
@@ -377,16 +421,17 @@ function EventManager:EventsMessenger(strTrigger)
 
    -- prepare our message to send to other users
    local t = {}
-   --SendVarToRover("Message to Send", t)
-   --SendVarToRover("EventsChan",EventsChan)
+   --------SendVarToRover("Message to Send", t)
+   --------SendVarToRover("EventsChan",EventsChan)
   	t.tMetaData = tMetaData
    t.tEvents = tEvents
    t.tEventsBacklog = tEventsBacklog
    t.MajorVersionRewrite = MajorVersionRewrite
+   t.MajorVersionNumber = MajorVersionNumber
     
     -- send the message to other users
    if EventsChan == nil then
-    	--Print("Events Manager Error: Cannot send sync data unless sync channel has been selected")
+    	------Print("Events Manager Error: Cannot send sync data unless sync channel has been selected")
     	self:PopulateItemList(tEvents)
    else
     	self:PopulateItemList(tEvents)
@@ -400,11 +445,12 @@ end
 function EventManager:CleanTable()
 	LocalEvents = {}
 	for key, Event in pairs(tEvents) do
-		--SendVarToRover("CleaningKey", key)
-		--SendVarToRover("CleaningValue", EventId)
+		--------SendVarToRover("CleaningKey", key)
+		--------SendVarToRover("CleaningValue", EventId)
 		if Event.nEventSortValue < tonumber(os.time())-3600 then
-		
-		elseif Event.EventSyncChannel == tMetaData.SyncChannel then
+			LocalEvents[key] = nil
+		end
+		if Event.EventSyncChannel == tMetaData.SyncChannel then
 			LocalEvents[Event.EventId] = Event
 		end
 	end
@@ -412,9 +458,9 @@ function EventManager:CleanTable()
 end
 
 
----
+-----------------------------------------------------------------------------------------------
 -- EventManagerForm Functions
----
+-----------------------------------------------------------------------------------------------
 -- when the OK button is clicked
 function EventManager:OnOK()
 	self.wndMain:Close() -- hide the window
@@ -425,19 +471,25 @@ function EventManager:OnCancel(wndHandler, wndControl, eMouseButton)
 	wndControl:GetParent():Close() -- hide the window
 end
 
----
+-----------------------------------------------------------------------------------------------
 -- Creating New Event & Backlog
----
+-----------------------------------------------------------------------------------------------
 function EventManager:OnNewEventOn( wndHandler, wndControl, eMouseButton )
+
 	local wnd = self.wndNewEvent
-	local tNewDate = os.date("*t",os.time())
+	local tNewDate
+	if self.wndSelectedDate ~= nil then
+		tNewDate = os.date("*t", (self.wndSelectedDate:GetData().epoch))
+	else
+		tNewDate = os.date("*t",os.time())
+	end
 	wnd:FindChild("EventMonthBox"):SetText(string.format("%02d",tNewDate.month))
 	wnd:FindChild("EventDayBox"):SetText(string.format("%02d",tNewDate.day))
 	wnd:FindChild("EventYearBox"):SetText(tNewDate.year)
 	if tNewDate.hour == 00 then
 		wnd:FindChild("EventHourBox"):SetText("00")
 	elseif
-		tNewDate.hour >= 12 then
+		tNewDate.hour > 12 then
 		wnd:FindChild("EventHourBox"):SetText(string.format("%02d",tNewDate.hour-12))
 	else
 		wnd:FindChild("EventHourBox"):SetText(string.format("%02d",tNewDate.hour))
@@ -501,13 +553,13 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 	local CurrentLocalTime = os.time()
 	NewEventEntry.EventModified = nSignUpTime
 	if NewEventEntry.nEventSortValue < CurrentLocalTime - 3600 then
-		Print("Event Manager Error: New events cannot be created in the past.")
+		----Print("Event Manager Error: New events cannot be created in the past.")
 		NewEventEntry = nil
 	end
-	--SendVarToRover("NewEventBacklogkey", NewEventEntry.EventId)
-	--SendVarToRover("NewEventvalue", NewEvent)
-	--SendVarToRover("NewEventBacksort", NewEventEntry.nEventSortValue)
-	--SendVarToRover("NewEventEntry", NewEventEntry)
+	--------SendVarToRover("NewEventBacklogkey", NewEventEntry.EventId)
+	--------SendVarToRover("NewEventvalue", NewEvent)
+	--------SendVarToRover("NewEventBacksort", NewEventEntry.nEventSortValue)
+	--------SendVarToRover("NewEventEntry", NewEventEntry)
 	if NewEventEntry ~= nil then
 		tEvents[NewEventId] = NewEventEntry
 		MsgTrigger = "New Event Created, Creating Backlog Event for Event Owner"
@@ -531,12 +583,12 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 
 
 		MsgTrigger = "NewBacklogCreated"
-		--SendVarToRover("NewEventBacklogDetail", tEventsBacklog[NewEventEntry.EventId])
-		--SendVarToRover("NewEventBacklog", tEventsBacklog[NewEventEntry.EventId])
+		--------SendVarToRover("NewEventBacklogDetail", tEventsBacklog[NewEventEntry.EventId])
+		--------SendVarToRover("NewEventBacklog", tEventsBacklog[NewEventEntry.EventId])
 		end
 		
 	end
-	--SendVarToRover("NewEventBacklogkey", NewEventId)
+	--------SendVarToRover("NewEventBacklogkey", NewEventId)
 
 	self.wndNew:Show(false)
 	self:PopulateItemList(tEvents)
@@ -545,9 +597,9 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 	tMetaData.nLatestUpdate = os.time()
 end
 
---
+--------------------------------------------------------------------------------------------------------------
 --Editing Events
---
+--------------------------------------------------------------------------------------------------------------
 
 function EventManager:OnEditEventFormOn(wndHandler, wndControl, eMouseButton)
 	self.wndSelectedListItemDetail:Show(false)
@@ -592,7 +644,7 @@ end
 function EventManager:OnEventEditSubmit(wndHandler,wndControl,eMouseButton)
 	local EditedEvent = wndControl:GetParent():GetData()
 	local EditedId = EditedEvent.EventId
-	--SendVarToRover("EditedEvent",EditedEvent)
+	--------SendVarToRover("EditedEvent",EditedEvent)
 	local wndEdit = wndControl:GetParent()
 	if EditedEvent.EventId == tEvents[EditedId].EventId then
 		tEvents[EditedId].Detail = {
@@ -627,6 +679,7 @@ function EventManager:OnEventEditSubmit(wndHandler,wndControl,eMouseButton)
 		tEvents[EditedId].nEventSortValue = self:CreateSortValue(tEvents[EditedId].Detail)
 		if tEvents[EditedId].nEventSortValue < os.time() then
 			Print("Event Manager error: Events cannot be edited to occur in the past.")
+		else
 			tEvents[EditedId] = EditedEvent
 		end	
 		
@@ -674,8 +727,8 @@ end
 
 function EventManager:OnSignUpSubmit(wndHandler, wndControl, eMouseButton)
 	local SelectedEvent = wndControl:GetParent():GetData()
-	--SendVarToRover("SignUpSubmitSelectedEvent",SelectedEvent)
-	--SendVarToRover("SignUpSubmitInitBacklog",tEventsBacklog)
+	--------SendVarToRover("SignUpSubmitSelectedEvent",SelectedEvent)
+	--------SendVarToRover("SignUpSubmitInitBacklog",tEventsBacklog)
 	local SelectedEventId = SelectedEvent.EventId
 	local SelectedEventDetail = SelectedEvent.Detail
 	local EventName = SelectedEvent.Detail.EventName
@@ -700,10 +753,10 @@ function EventManager:OnSignUpSubmit(wndHandler, wndControl, eMouseButton)
 	MsgTrigger = "Player added new sign up backlog for this event."
 	
 	
-	--SendVarToRover("Sign Up Backlog created",tEventsBacklog[SelectedEvent])
+	--------SendVarToRover("Sign Up Backlog created",tEventsBacklog[SelectedEvent])
 	MsgTrigger = "New attendee added to backlog for this event."
 
-	Print("Sign Up request sent for "..EventName)
+	----Print("Sign Up request sent for "..EventName)
 	self:PopulateItemList(tEvents)
 	self.wndSignUp:Show(false)
 	
@@ -723,10 +776,10 @@ function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
 	local tPlayerRoles  = self:GetSelectedRoles( 0, 0, 0 )
 	local DeclinedBacklogId = GameLib.GetRealmName()..GameLib.GetPlayerUnit():GetName()..os.time()
 	nSignUpTime = os.time()
-	--SendVarToRover("EventDecliningId", nDeclinedEventId)
-	--SendVarToRover("EventDecliningInfo", tEvent.Detail)
-	--SendVarToRover("EventDecliningData",tEvent)
-	--SendVarToRover("tEventsBacklog",tEventsBacklog[DeclinedBacklogId])
+	--------SendVarToRover("EventDecliningId", nDeclinedEventId)
+	--------SendVarToRover("EventDecliningInfo", tEvent.Detail)
+	--------SendVarToRover("EventDecliningData",tEvent)
+	--------SendVarToRover("tEventsBacklog",tEventsBacklog[DeclinedBacklogId])
 
 	
 	tEventsBacklog[DeclinedBacklogId] = {		
@@ -738,7 +791,7 @@ function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
 	BacklogOwner = GameLib.GetPlayerUnit():GetName(),
 	BacklogOwnerStatus = "Declined",
 	BacklogOwnerRoles = tPlayerRoles,
-	nBacklogCreationTime = nSignUpTime,
+	nBacklogCreationTime = os.time(),
 	nBacklogExpirationTime = tEvents[nDeclinedEventId].nEventSortValue,
 }
 
@@ -755,11 +808,11 @@ end
 
 function EventManager:OnEventCancel(wndHandler, wndControl, eMouseButton)
 	if self.wndSelectedListItem == nil then
-		Print("Events Manager Error: You must select an event from the list before pressing the cancel button.")
+		----Print("Events Manager Error: You must select an event from the list before pressing the cancel button.")
 		return
 	else
 		local SelectedEvent = self.wndSelectedListItem:GetData()
-		--SendVarToRover("SelectedEvent",SelectedEvent)
+		--------SendVarToRover("SelectedEvent",SelectedEvent)
 		local nCanceledEventId = SelectedEvent.EventId
 		self:OnEventDeleteWarning(SelectedEvent,nEventId)
 	end
@@ -785,9 +838,9 @@ function EventManager:OnDeleteConfirmation(wndHandler, wndControl, eMouseButton)
 		if event.EventId == nEventId then
 			if event.Owner == GameLib.GetPlayerUnit():GetName() then
 				event.strEventStatus = "Canceled"
-				Print("Events Manager: The event has been canceled.")
+				----Print("Events Manager: The event has been canceled.")
 			else
-				Print("Events Manager Error: Only the creator of an event may cancel an event.")
+				----Print("Events Manager Error: Only the creator of an event may cancel an event.")
 				self.wndDeleteConfirm:Show(false)
 				return				
 			end
@@ -798,9 +851,9 @@ function EventManager:OnDeleteConfirmation(wndHandler, wndControl, eMouseButton)
 	self:EventsMessenger(MsgTrigger)
 end
 
----
+-----------------------------------------------------------------------------------------------
 -- ItemList Functions
----
+-----------------------------------------------------------------------------------------------
 -- populate item list
 function EventManager:PopulateItemList(list)
 	-- make sure the item list is empty to start with
@@ -845,7 +898,7 @@ function EventManager:AddItem(i)
 	tEventInfo.nCurrentTanks = 0
 	tEventInfo.nCurrentHealers = 0
 	tEventInfo.nCurrentDPS = 0
-	--SendVarToRover("Populated Items", tEvent)
+	--------SendVarToRover("Populated Items", tEvent)
 		for idx, player in pairs(tEventInfo.tCurrentAttendees) do
 		if player.Name == GameLib.GetPlayerUnit():GetName() then	
 			if player.Status == "Attending" then
@@ -936,103 +989,107 @@ function EventManager:OnListItemSelected(wndHandler, wndControl)
     if wndHandler ~= wndControl then
     	return
     end
-    
-    -- change the old item's text color back to normal color
-    local wndItemText
-    if self.wndSelectedListItem then
-    	wndItemText = self.wndSelectedListItem:FindChild("Text")
-    	wndItemText:SetTextColor(kcrNormalText)
-    	local wndSelectedItemHighlight = self.wndSelectedListItem:FindChild("SelectedListItemHighlight"):Show(false)
-    end
-	-- wndControl is the item selected - change its color to selected
-	self.wndSelectedListItem = wndControl
-	
-	wndItemText = self.wndSelectedListItem:FindChild("Text")
-	wndItemText:SetTextColor(kcrSelectedText)
-	local wndSelectedItemHighlight = self.wndSelectedListItem:FindChild("SelectedListItemHighlight"):Show(true)
 
-	local selectedItemText = self.wndSelectedListItem:GetData().Detail
-	local SelectedEvent = self.wndSelectedListItem:GetData()
-	self.wndSelectedListItemDetail:SetData(SelectedEventData)
+    if wndControl:GetParent():GetName() == "ItemList" then
+       -- change the old item's text color back to normal color
+	    local wndItemText
+	    if self.wndSelectedListItem then
+	    	wndItemText = self.wndSelectedListItem:FindChild("Text")
+	    	wndItemText:SetTextColor(kcrNormalText)
+	    	local wndSelectedItemHighlight = self.wndSelectedListItem:FindChild("SelectedListItemHighlight"):Show(false)
+	    end
+		-- wndControl is the item selected - change its color to selected
+		self.wndSelectedListItem = wndControl
+		
+		wndItemText = self.wndSelectedListItem:FindChild("Text")
+		wndItemText:SetTextColor(kcrSelectedText)
+		local wndSelectedItemHighlight = self.wndSelectedListItem:FindChild("SelectedListItemHighlight"):Show(true)
 
-   	-- if new selected item is canceled, dump and hold for new item selection
-   if SelectedEvent.strEventStatus == "Canceled" then
-   	self.wndSelectedListItemDetail:Show(false)
-   	return
-   end
-	-- else continue populating item data.
-	local tAttendingSelectedItem = {}
-	local tNotAttendingSelectedItem = {}
-	for key, player in pairs(selectedItemText.tCurrentAttendees) do
-		if selectedItemText.tCurrentAttendees[key].Status == "Attending" then
-			table.insert(tAttendingSelectedItem, player.Name.." ("
-			..player.Roles.Tank.."/"..player.Roles.Healer.."/"
-			..player.Roles.DPS..")")
-		elseif player.Status == "Declined" then
-			table.insert(tNotAttendingSelectedItem, player.Name)
-		end
-	end
+		local selectedItemText = self.wndSelectedListItem:GetData().Detail
+		local SelectedEvent = self.wndSelectedListItem:GetData()
+		self.wndSelectedListItemDetail:SetData(SelectedEventData)
 
-	--SendVarToRover("tAttendingSelectedItem",tAttendingSelectedItem)
-	--SendVarToRover("tNotAttendingSelectedItem",tNotAttendingSelectedItem)
-	local AttendingSection = "Attending \n(Role(s) Selected: tank/healer/dps):\n \n"..table.concat(tAttendingSelectedItem,'\n').."\n \n"
-	local NotAttendingSection = "Not Attending:\n \n"..table.concat(tNotAttendingSelectedItem, '\n')
-	local DetailsAttendingText = ""									
-	if #tAttendingSelectedItem == 0 then
-		AttendingSection = ""
-	end
-	if #tNotAttendingSelectedItem == 0 then 
-		NotAttendingSection = ""
-	end
-	if #tAttendingSelectedItem + #tNotAttendingSelectedItem == 0 then
-		DetailsAttendingText = "Still waiting for attendance responses for this event."
-	else
-		DetailsAttendingText = AttendingSection..NotAttendingSection
-	end
-
-
-	--SendVarToRover("SelectedEvent",SelectedEvent)
-	for key, event in pairs(tEvents) do
-		if SelectedEvent.Owner == GameLib.GetPlayerUnit():GetName() then
-			self.wndSelectedListItemDetail:FindChild("EditEventButton"):Show(true)
-		else
-			self.wndSelectedListItemDetail:FindChild("EditEventButton"):Show(false)
-		end
-
-		local ShowSignUpButton = true
-		for idx, player in pairs(SelectedEvent.Detail.tCurrentAttendees) do
-			if player.Name == GameLib.GetPlayerUnit():GetName() and player.Status == "Attending" then --GameLib.GetPlayerUnit():GetName() then
-				ShowSignUpButton = false
+	   	-- if new selected item is canceled, dump and hold for new item selection
+	   if SelectedEvent.strEventStatus == "Canceled" then
+	   	self.wndSelectedListItemDetail:Show(false)
+	   	return
+	   end
+		-- else continue populating item data.
+		local tAttendingSelectedItem = {}
+		local tNotAttendingSelectedItem = {}
+		for key, player in pairs(selectedItemText.tCurrentAttendees) do
+			if selectedItemText.tCurrentAttendees[key].Status == "Attending" then
+				table.insert(tAttendingSelectedItem, player.Name.." ("
+				..player.Roles.Tank.."/"..player.Roles.Healer.."/"
+				..player.Roles.DPS..")")
+			elseif player.Status == "Declined" then
+				table.insert(tNotAttendingSelectedItem, player.Name)
 			end
 		end
-		if ShowSignUpButton == true then
-			self.wndSelectedListItemDetail:FindChild("SignUpButton"):Show(true)
+
+		--------SendVarToRover("tAttendingSelectedItem",tAttendingSelectedItem)
+		--------SendVarToRover("tNotAttendingSelectedItem",tNotAttendingSelectedItem)
+		local AttendingSection = "Attending \n(Role(s) Selected: tank/healer/dps):\n \n"..table.concat(tAttendingSelectedItem,'\n').."\n \n"
+		local NotAttendingSection = "Not Attending:\n \n"..table.concat(tNotAttendingSelectedItem, '\n')
+		local DetailsAttendingText = ""									
+		if #tAttendingSelectedItem == 0 then
+			AttendingSection = ""
 		end
-	end
+		if #tNotAttendingSelectedItem == 0 then 
+			NotAttendingSection = ""
+		end
+		if #tAttendingSelectedItem + #tNotAttendingSelectedItem == 0 then
+			DetailsAttendingText = "Still waiting for attendance responses for this event."
+		else
+			DetailsAttendingText = AttendingSection..NotAttendingSection
+		end
 
-	self.wndSelectedListItemDetail:FindChild("SelectedEventDescriptionBox"):SetText(selectedItemText.Description)
-	self.wndSelectedListItemDetail:FindChild("EventDetailsWindow"):SetText(selectedItemText.EventName.. ", created by: "..SelectedEvent.Owner..
-		"\nScheduled for: "..string.format("%02d",selectedItemText.Month).."/"..
-		string.format("%02d",selectedItemText.Day).."/"..selectedItemText.Year.." at "..
-		string.format("%02d",selectedItemText.Hour)..":"..string.format("%02d",selectedItemText.Minute).." "..selectedItemText.AmPm..
-		" "..string.upper(selectedItemText.TimeZone).."\n \nThere are currently "..selectedItemText.nCurrentTanks.."/"..
-		selectedItemText.MaxTanks.." Tanks, "..selectedItemText.nCurrentHealers.."/"..selectedItemText.MaxHealers..
-		" Healers, and "..selectedItemText.nCurrentDPS.."/"..selectedItemText.MaxDps.." DPS signed up.")
 
-	self.wndSelectedListItemDetail:FindChild("DetailsAttendingBox"):SetText(DetailsAttendingText)
-	if SelectedEvent.strEventStatus ~= "Canceled" then
-		self.wndSelectedListItemDetail:Show(true)
+		--------SendVarToRover("SelectedEvent",SelectedEvent)
+		for key, event in pairs(tEvents) do
+			if SelectedEvent.Owner == GameLib.GetPlayerUnit():GetName() then
+				self.wndSelectedListItemDetail:FindChild("EditEventButton"):Show(true)
+			else
+				self.wndSelectedListItemDetail:FindChild("EditEventButton"):Show(false)
+			end
+
+			local ShowSignUpButton = true
+			for idx, player in pairs(SelectedEvent.Detail.tCurrentAttendees) do
+				if player.Name == GameLib.GetPlayerUnit():GetName() and player.Status == "Attending" then --GameLib.GetPlayerUnit():GetName() then
+					ShowSignUpButton = false
+				end
+			end
+			if ShowSignUpButton == true then
+				self.wndSelectedListItemDetail:FindChild("SignUpButton"):Show(true)
+			end
+		end
+
+		self.wndSelectedListItemDetail:FindChild("SelectedEventDescriptionBox"):SetText(selectedItemText.Description)
+		self.wndSelectedListItemDetail:FindChild("EventDetailsWindow"):SetText(selectedItemText.EventName.. ", created by: "..SelectedEvent.Owner..
+			"\nScheduled for: "..string.format("%02d",selectedItemText.Month).."/"..
+			string.format("%02d",selectedItemText.Day).."/"..selectedItemText.Year.." at "..
+			string.format("%02d",selectedItemText.Hour)..":"..string.format("%02d",selectedItemText.Minute).." "..selectedItemText.AmPm..
+			" "..string.upper(selectedItemText.TimeZone).."\n \nThere are currently "..selectedItemText.nCurrentTanks.."/"..
+			selectedItemText.MaxTanks.." Tanks, "..selectedItemText.nCurrentHealers.."/"..selectedItemText.MaxHealers..
+			" Healers, and "..selectedItemText.nCurrentDPS.."/"..selectedItemText.MaxDps.." DPS signed up.")
+
+		self.wndSelectedListItemDetail:FindChild("DetailsAttendingBox"):SetText(DetailsAttendingText)
+		if SelectedEvent.strEventStatus ~= "Canceled" then
+			self.wndSelectedListItemDetail:Show(true)
+		else
+			self.wndSelectedListItemDetail:Show(false)
+		end
+		--------SendVarToRover("SelectedEventData",SelectedEvent)
 	else
-		self.wndSelectedListItemDetail:Show(false)
-	end
-	--SendVarToRover("SelectedEventData",SelectedEvent)										
+		self:OnCalendarDateSelected(wndHandler,wndControl)
+	end										
 end
 
 
 --start add by Feyde
----
+---------------------------------------------------------------------------------------------------
 -- SecurityForm Functions
----
+---------------------------------------------------------------------------------------------------
 function EventManager:OnSecurityNameDeleteClick( wndHandler, wndControl, eMouseButton )
 	local UserName = self.wndSecurity:FindChild("SecurityNameText"):GetText()
 	if string.len(self:Trim(UserName)) == 0 then	-- do not allow empty strings
@@ -1135,9 +1192,9 @@ end
 
 
 
----
+-----------------------------------------------------------------------------------------------
 -- Helper functions
----
+-----------------------------------------------------------------------------------------------
 function EventManager:OnDelayTimer()
 	if GameLib.GetPlayerUnit() then 
 		self.timerDelay = nil 
@@ -1168,17 +1225,18 @@ function EventManager:CreateSortValue(tEventDetail)
 	local Minute = tEventDetail.Minute
 	local AmPm = tEventDetail.AmPm
 	if AmPm == "pm" then
-		if Hour == 12 then 
-			else Hour = Hour + 12
-			end
-		else
-			if Hour == 12 then
-				Hour = 0
-			end
+		if Hour >= 12 then
+			Hour = Hour 
+		else Hour = Hour + 12
 		end
+	elseif AmPm == "am" then
+		if Hour == 12 then
+			Hour = 0
+		end
+	end
 		local nOSDate = tonumber(os.date(os.time{year = Year, month = Month, day = Day, hour = Hour, min = Minute,}))
 		return nOSDate
-	end
+end
 
 	function EventManager:get_timezone_offset(ts)
 		local utcdate   = os.date("!*t", ts)
@@ -1198,7 +1256,7 @@ return count
 end
 
 function EventManager:RoleCount(T)
-	--SendVarToRover("roles table", T)
+	--------SendVarToRover("roles table", T)
 	local nTankCount = 0
 	local nHealerCount = 0
 	local nDPSCount = 0
@@ -1220,7 +1278,7 @@ function EventManager:RoleCount(T)
 end
 
 function EventManager:GetSelectedRoles(bTankRole,bHealerRole,bDPSRole)
-	--SendVarToRover("Roles",{bTankRole,bHealerRole,bDPSRole})
+	--------SendVarToRover("Roles",{bTankRole,bHealerRole,bDPSRole})
 	local nTankRole = 0
 	local nHealerRole = 0
 	local nDPSRole = 0
@@ -1277,9 +1335,9 @@ function EventManager:ImportLiveEvents(EventsMsg)
 			MessageTrigger = "Added another player's event to live event."
 			ProcessedCount = ProcessedCount + 1
 		end
-			--SendVarToRover("Processed tEvents", ProcessedCount)
+			------SendVarToRover("Processed tEvents", ProcessedCount)
 	end
-	--Print(ProcessedCount.." new events added from other players")
+	--PrintProcessedCount.." new events added from other players")
 end
 
 
@@ -1289,24 +1347,26 @@ function EventManager:ImportBacklogEvents(BacklogMsg)
 
 	if not BacklogMsg then return end
 	for IncomingId, IncomingLog in pairs(BacklogMsg) do
-		NewLogEntry = false
-		if IncomingLog.nBacklogExpirationTime > (os.time()) then
-			NewLogEntry = true
-			for LogId, Log in pairs(tEventsBacklog) do
-				if IncomingId == LogId then 
-					NewLogEntry = false
-				end
+		NewLogEntry = true
+		for LogId, Log in pairs(tEventsBacklog) do
+			if IncomingId == LogId then
+			--Print("Duplicate Imported Log")
+			--Print(IncomingId)
+			--Print(LogId) 
+				NewLogEntry = false
 			end
-			if NewLogEntry == true then
-				--Print("Log does not exist, creating.")
-				tEventsBacklog[IncomingId] = IncomingLog
-				--Print("New log created for: "..IncomingLog.BacklogOwner)
-				MessageToSend = true
-				NewLogs = NewLogs + 1
-			end	
 		end
+		if NewLogEntry == true then
+			--Print("Log does not exist, creating.")
+			tEventsBacklog[IncomingId] = IncomingLog
+			--Print(IncomingId)
+			--Print(LogId)
+			--Print("New log:"..IncomingId.." created for: "..IncomingLog.BacklogOwner)
+			MessageToSend = true
+			NewLogs = NewLogs + 1
+		end	
 	end
-	--Print(NewLogs)
+	--PrintNewLogs)
 end
 
 function EventManager:ProcessBacklogEvents(EventsBacklog)
@@ -1317,19 +1377,19 @@ function EventManager:ProcessBacklogEvents(EventsBacklog)
 	local ProcessedCount = 0
 	local DuplicateApp
 	local LogCopy = {}
-	local tNeedsRemoval = {}
+	tNeedsRemoval = {}
 	local ItemToRemove = false
 
 	for LogId, Log in pairs(EventsBacklog) do
 		ItemToRemove = false
-		--Print(Log.BacklogOwner)
+		--PrintLog.BacklogOwner)
 		if Log.nBacklogExpirationTime < (os.time() - 3600) then
 			ItemToRemove = true
 			--Print("Log expired, deleting.")
 		else
 			for tEventId, Event in pairs(tEvents) do
-				--Print(tEventId)
-				--Print(Log.EventId)
+				--PrinttEventId)
+				--PrintLog.EventId)
 				if Log.EventId == tEventId then
 					if Event.Detail.tApplicationsProcessed == 0 or {} then
 						LogCopy[LogId] = Log	
@@ -1338,70 +1398,77 @@ function EventManager:ProcessBacklogEvents(EventsBacklog)
 						break
 					else
 						for idx, App in pairs(Event.Detail.tApplicationsProcessed) do
+							ItemToRemove = false
 							--Print("LogId", LogId)
 							--Print("App",App)
-							--Print(LogId==App or "false")
+							--PrintLogId==App or "false")
 							if LogId == App then
-								--SendVarToRover("App", App)
+								----SendVarToRover("App", App)
 								ItemToRemove = true
 								--Print("Already processed, deleting.")
 							end
+							if ItemToRemove == true then
+								--table.insert(tNeedsRemoval,LogId)
+								----SendVarToRover("RemovalTable",tNeedsRemoval)	
+							end
 						end
-					
+						if ItemToRemove == false then
+							LogCopy[LogId] = Log
+						end				
 					end
 				end
 			end
-			--SendVarToRover("LogCopy",LogCopy)
+			----SendVarToRover("LogCopy",LogCopy)
 		end
 		if ItemToRemove == true then
-			table.insert(tNeedsRemoval,LogId)
-			--SendVarToRover("RemovalTable",tNeedsRemoval)	
+			--table.insert(tNeedsRemoval,LogId)
+			----SendVarToRover("RemovalTable",tNeedsRemoval)	
+		end
+		if #tNeedsRemoval > 0 then 
+			--Print("needs removal table sees the light of day")
+			------SendVarToRover("My Removal Table", tNeedsRemoval)
+			MsgTrigger = "Removed my backlogged events"
+			MessageToSend = true
+			local i = 0
+			for idx, id in ipairs(tNeedsRemoval) do
+				LogCopy[id] = nil
+				i = i + 1
+			end
+			--Printi.." events processed from your backlog.")
 		end
 	end
 
 	for LogCopyId, LogEvent in pairs(LogCopy) do
 		ItemToRemove = false
-		--Print(LogCopyId)
+		
+		--PrintLogCopyId)
+		--SendVarToRover("LogEvent",LogEvent)
 		for EventId, tEvent in pairs(tEvents) do
+			KnownAttendee = false
 			if LogEvent.EventId == EventId then
 				for idx, attendee in pairs(tEvent.Detail.tCurrentAttendees) do
-					--Print(attendee.Name)
 					if LogEvent.BacklogOwner == attendee.Name then
-						if LogEvent.nBacklogCreationTime > attendee.nSignUpTime then
-							--Print("New information for known attendee.")
-							attendee.Status = LogEvent.BacklogOwnerStatus
-							attendee.Roles = LogEvent.BacklogOwnerRoles
-							attendee.nSignUpTime = LogEvent.nBacklogCreationTime+1
-							--Print("Status, Roles, SignUpTimeSet")
-							tEvent.EventModified = os.time()
-							table.insert(tEvent.Detail.tApplicationsProcessed, LogCopyId)
-							MessageToSend = true
-						else
-							
-							--Print("Newer player information exists, removing.")
-						end
+						self:UpdateKnownAttendee(tEvent,LogCopyId,LogEvent,attendee)
+						KnownAttendee = true
+						--table.insert(tNeedsRemoval, LogCopyId)
 					else
-						--Print("New Applicant, insert record")
-						table.insert(tEvent.Detail.tCurrentAttendees,
-							{Name = LogEvent.BacklogOwner,
-							nSignUpTime = LogEvent.nBacklogCreationTime,
-							Status = LogEvent.BacklogOwnerStatus,
-							Roles = LogEvent.BacklogOwnerRoles})
-						tEvent.EventModified = os.time()
-						table.insert(tEvent.Detail.tApplicationsProcessed, LogCopyId)
-						MessageToSend = true
 					end
+				end
+				if KnownAttendee == false then
+					self:AddNewAttendee(tEvent,LogCopyId,LogEvent)
+					ItemToRemove = true
+					--table.insert(tNeedsRemoval, LogCopyId)
 				end
 			end
 		end
 		if ItemToRemove == true then
-			table.insert(tNeedsRemoval, LogCopyId)
+			--table.insert(tNeedsRemoval, LogCopyId)
 		end
 	--Print("End of processing")	
 	end
 	if #tNeedsRemoval > 0 then 
 		--Print("needs removal table sees the light of day")
-		--SendVarToRover("My Removal Table", tNeedsRemoval)
+		------SendVarToRover("My Removal Table", tNeedsRemoval)
 		MsgTrigger = "Removed my backlogged events"
 		MessageToSend = true
 		local i = 0
@@ -1409,10 +1476,56 @@ function EventManager:ProcessBacklogEvents(EventsBacklog)
 			tEventsBacklog[id] = nil
 			i = i + 1
 		end
-		--Print(i.." events processed from your backlog.")
+		--Printi.." events processed from your backlog.")
 	end
-	--SendVarToRover("Events",tEvents)
-	--SendVarToRover("Backlog",tEventsBacklog)
+	----SendVarToRover("Events",tEvents)
+	----SendVarToRover("Backlog",tEventsBacklog)
+end
+
+function EventManager:UpdateKnownAttendee(tEvent,LogCopyId,LogEvent,attendee)
+	--SendVarToRover("attendee",attendee)
+	--SendVarToRover("BacklogOwner",LogEvent.BacklogOwner)
+	if LogEvent.nBacklogCreationTime > attendee.nSignUpTime then
+		--Print("New information for known attendee.")
+		attendee.Status = LogEvent.BacklogOwnerStatus
+		attendee.Roles = LogEvent.BacklogOwnerRoles
+		attendee.nSignUpTime = LogEvent.nBacklogCreationTime
+		--Print("Status, Roles, SignUpTimeSet")
+		tEvent.EventModified = os.time()
+		table.insert(tEvent.Detail.tApplicationsProcessed, LogCopyId)
+		MsgTrigger = "Updated known attendee."
+		MessageToSend = true
+	else
+		ItemToRemove = true
+		--Print("Newer player information exists, removing.")
+	end
+	if ItemToRemove == true then
+		--table.insert(tNeedsRemoval, LogCopyId)
+	end
+end
+
+function EventManager:AddNewAttendee(tEvent,LogCopyId,LogEvent)
+	local KnownAttendee
+	for idx, attendee in pairs(tEvent.Detail.tCurrentAttendees) do
+	 KnownAttendee = false
+		if LogEvent.BacklogOwner == attendee.Name then
+			KnownAttendee = true
+			break
+		end
+	end
+	if KnownAttendee == false then
+		--Print("New Applicant, insert record")
+		table.insert(tEvent.Detail.tCurrentAttendees,
+			{Name = LogEvent.BacklogOwner,
+			nSignUpTime = LogEvent.nBacklogCreationTime,
+			Status = LogEvent.BacklogOwnerStatus,
+			Roles = LogEvent.BacklogOwnerRoles})
+		tEvent.EventModified = os.time()
+		table.insert(tEvent.Detail.tApplicationsProcessed, LogCopyId)
+		MessageToSend = true
+		MsgTrigger = 'Added new attendee to record.'
+	else
+	end
 end
 
 function EventManager:CleanApplicationsList()
@@ -1427,16 +1540,16 @@ function EventManager:CleanApplicationsList()
 			    t2[v] = i
 			end
 		end
-		--SendVarToRover("AppDupes",Dupes)
+		--------SendVarToRover("AppDupes",Dupes)
 	end
 
 end
 
-function EventManager:CleanBacklogList(t)
+function EventManager:CleanAttendeeList(t)
 	local Dupes ={}  
 	local t2 = {};
 	if tEvents.Detail then  
-		for key, entry in pairs(tEvents.Detail.tApplicationsProcessed) do
+		for key, entry in pairs(t) do
 			for i,v in pairs(entry) do
 			    if(t2[v] ~= nil) then
 			        table.insert(Dupes,v)
@@ -1444,7 +1557,7 @@ function EventManager:CleanBacklogList(t)
 			    t2[v] = i
 			end
 		end
-		--SendVarToRover("AppDupes",Dupes)
+		--------SendVarToRover("AppDupes",Dupes)
 	end
 
 end
@@ -1455,7 +1568,7 @@ function EventManager:ProcessMyBacklog(tMsg)
 	local bNewMessages = false
 	local nEventChanged = 0
 	local MyLogs = {}
-	local tNeedsRemoval = {}
+	tNeedsRemoval = {}
 	MessageToSend = false
 
 	
@@ -1465,19 +1578,19 @@ function EventManager:ProcessMyBacklog(tMsg)
 				self:CleanApplicationsList(MyLogs)
 			
 			for PendingId, PendingEvent in pairs(MyLogs) do
-				--SendVarToRover("My Pending Log", PendingEvent)
-				--SendVarToRover("My Pending Log ID", PendingId)
+				--------SendVarToRover("My Pending Log", PendingEvent)
+				--------SendVarToRover("My Pending Log ID", PendingId)
 				if PendingEvent.nBacklogExpirationTime > os.time() then
 					for EventId, Event in pairs(tEvents) do
-						--SendVarToRover("My Pending Log Event",Event)
-						--SendVarToRover("My Pending Log EventId",EventId)
+						--------SendVarToRover("My Pending Log Event",Event)
+						--------SendVarToRover("My Pending Log EventId",EventId)
 						for ProcessedId, ProcessedApp in pairs(Event.Detail.tApplicationsProcessed) do
-							--SendVarToRover("My Pending Processed App",ProcessedApp)
-							--SendVarToRover("My Pending Processed AppId", ProcessedId)
+							--------SendVarToRover("My Pending Processed App",ProcessedApp)
+							--------SendVarToRover("My Pending Processed AppId", ProcessedId)
 							if ProcessedApp == PendingId then 
 								table.insert(tNeedsRemoval,PendingId)
 
-								--SendVarToRover("Needs Removal",tNeedsRemoval)
+								--------SendVarToRover("Needs Removal",tNeedsRemoval)
 							end
 						end
 						for idx, player in pairs(Event.Detail.tCurrentAttendees) do
@@ -1495,13 +1608,13 @@ function EventManager:ProcessMyBacklog(tMsg)
 		end		
 	end
 	if #tNeedsRemoval > 0 then 
-		--SendVarToRover("My Removal Table", tNeedsRemoval)
+		--------SendVarToRover("My Removal Table", tNeedsRemoval)
 		MsgTrigger = "Removed my backlogged events"
 		MessageToSend = true
 		for idx, id in ipairs(tNeedsRemoval) do
 			local i = 1
 			tEventsBacklog[id] = nil
-			--Print(i.." events processed from your backlog.")
+			------Printi.." events processed from your backlog.")
 		end
 	end
 	if MessageToSend == true then
@@ -1530,11 +1643,56 @@ function EventManager:ProcessAttendingCount(t)
 	return nAttendeesCount
 end
 
+function EventManager:FilterDisplayedEvents(tEvents,StartTime,EndTime)
+	tDisplayedEvents = {}
+	for eventId, event in pairs(tEvents) do
+		if StartTime < event.nEventSortValue and event.nEventSortValue < EndTime then
+			tDisplayedEvents[eventId] = event
+		else
+		end 
+	end
+	SendVarToRover("tDisplayedEvents",tDisplayedEvents)
+	return tDisplayedEvents
+end
+
+function EventManager:DefineFilterParams(tDisplayedMonth, term)
+	SendVarToRover("Filter table",tDisplayedMonth)
+	local DisplayedStartTime = 0
+	local DisplayedEndTime = 0
+	local StartTime
+	local EndTime
+	local ViewingMonth = os.date("%m", os.time(tDisplayedMonth))
+	--local ViewingMonth = os.date("%m", os.time(tDisplayedMonth))
+	if term == "month" then
+		StartTime = 0
+		EndTime = 0	
+		local month = tDisplayedMonth.month
+		for idx, date in pairs(CalArray) do
+			if os.date("%m", date.epoch) == ViewingMonth then
+				StartTime = date.epoch
+				break
+			end
+		end
+		for idx, date in pairs(CalArray) do
+			if os.date("%m", date.epoch) == ViewingMonth then
+				EndTime = date.epoch
+			elseif
+				os.date("%m", date.epoch) > ViewingMonth then
+				break
+			else
+			end
+		end
+	end
+	DisplayedStartTime = StartTime - 43200
+	DisplayedEndTime = EndTime + 43199
+	return DisplayedStartTime,DisplayedEndTime
+end
 
 
----
+
+-----------------------------------------------------------------------------------------------
 -- Form Check & Options Functions
----
+-----------------------------------------------------------------------------------------------
 function EventManager:OnOptionsWindowShow (wndHandler, wndControl, eMouseButton)
 	if tMetaData.SyncChannel ~= nil or tMetaData.Passphrase ~= nil or tMetaData.SecurityRequired ~= nil then
 		self.wndOptions:FindChild("SyncChannelBox"):SetText(tMetaData.SyncChannel)
@@ -1559,7 +1717,7 @@ function EventManager:OnOptionsSubmit (wndHandler, wndControl, eMouseButton)
 	tMetaData.Passphrase = self.wndOptions:FindChild("PassphraseBox"):GetText()
 	tMetaData.SecurityRequired = self.wndOptions:FindChild("EnableSecureEventsButton"):IsChecked()
 	EventsChan = ICCommLib.JoinChannel(strSyncChannel, "OnEventManagerMessage", self)
-	----("Events Manager: Joined sync channel "..strSyncChannel)
+	------Print("Events Manager: Joined sync channel "..strSyncChannel)
 	wndControl:GetParent():Show(false)
 	MsgTrigger = "OptionsSubmitted"
 	self:EventsMessenger(MsgTrigger)
@@ -1590,9 +1748,149 @@ function EventManager:OnSecurityChecked(wndHandler, wndControl, eMouseButton)
 	tMetaData.SecurityRequired = true
 end
 
+-----------------------------------------------------------------------------------------------
+--  Calendar Grid Construction
+-----------------------------------------------------------------------------------------------
+function EventManager:ConstructCalendarGrid(list)
+	-- make sure the item list is empty to start with
+	self.wndCalendar:DestroyChildren()
+	self.wndSelectedDate = nil
 
----
+	if list == nil then return
+	else 
+
+		for i = 1,#CalArray do
+	        self:AddCalendarItem(i)
+		end
+	
+		-- now all the item are added, call ArrangeChildrenVert to list out the list items vertically
+		self.wndCalendar:ArrangeChildrenTiles()
+		self.wndMain:FindChild("MonthYearDisplay"):SetText(ViewingMonthHeader.strMonth..", "..ViewingMonthHeader.nYear)
+	end
+end
+
+
+function EventManager:AddCalendarItem(i)
+	-- load the window item for the list item
+	local wnd = Apollo.LoadForm(self.xmlDoc, "CalendarItem", self.wndCalendar, self)
+	wnd:FindChild("SelectedDayHighlight"):Show(false)
+	local wndEventNotification = wnd:FindChild("ActiveEventsIcon")
+	local DailyEvents = 0
+	-- keep track of the window item created
+	--self.CalendarItems[i] = wnd
+	wndEventNotification:Show(false)
+	-- give it a piece of data to refer to 
+	local wndDateText = wnd:FindChild("DateText")
+	if wndDateText then -- make sure the text wnd exist
+		wndDateText:SetText(CalArray[i].value) -- set the item wnd's text to "item i"
+		if CalArray[i].GridType == "Active" then
+			wndDateText:SetTextColor(kcrNormalText)
+		else
+			wndDateText:SetTextColor(kcrDeadDaysText)
+		wnd:FindChild("SelectedDayHighlight"):Show(false)
+		end
+		
+		for id, event in pairs(tEvents) do
+
+			if CalArray[i].epoch-43199 < event.nEventSortValue and event.nEventSortValue < CalArray[i].epoch + 43199 then
+				SendVarToRover("Event Time",event.nEventSortValue)
+				SendVarToRover("CalArray[i].epoch", CalArray[i].epoch)
+				DailyEvents = DailyEvents + 1
+			end
+		end
+		SendVarToRover("DailyEvents",DailyEvents)
+		if DailyEvents > 0 and DailyEvents < 2 then 
+			wndEventNotification:Show(true)
+			wndEventNotification:SetText(DailyEvents.." event")
+		elseif DailyEvents > 1 then
+			wndEventNotification:Show(true)
+			wndEventNotification:SetText(DailyEvents.." events")
+		end
+
+	wnd:SetData(CalArray[i])
+
+	end
+	
+
+
+end
+
+-- when a list item is selected
+function EventManager:OnCalendarDateSelected(wndHandler, wndControl)
+	SendVarToRover("selected date",self.wndSelectedDate)
+    -- make sure the wndControl is valid
+    if wndHandler ~= wndControl then
+        return
+    end
+   if wndControl:GetParent():GetName() == "CalendarGrid" then 
+	    -- change the old item's text color back to normal color
+	    local wndDateText
+	    if self.wndSelectedDate ~= nil then
+	       wndDateText = self.wndSelectedDate:FindChild("DateText")
+			local wndSelectedDay = self.wndSelectedDate:FindChild("SelectedDayHighlight")
+			if self.wndSelectedDate:GetData().GridType == "Active" then
+	        wndDateText:SetTextColor(kcrNormalText)
+	      elseif self.wndSelectedDate:GetData().GridType == "Inactive" then
+	      	wndDateText:SetTextColor(kcrDeadDaysText)
+	      end
+	      wndSelectedDay:Show(false)
+	   else
+	   	local StartTime, EndTime = self:DefineFilterParams(tDisplayedMonth, "month")
+	   	tDisplayedEvents = self:FilterDisplayedEvents(tEvents,StartTime,EndTime)
+
+	   end
+	    
+		-- wndControl is the item selected - change its color to selected
+		self.wndSelectedDate = wndControl
+		wndDateText = self.wndSelectedDate:FindChild("DateText")
+	   wndDateText:SetTextColor(kcrSelectedText)
+	   local wndSelectedDay = self.wndSelectedDate:FindChild("SelectedDayHighlight")
+		wndSelectedDay:Show(true)
+		tDisplayedEvents = self:FilterDisplayedEvents(tEvents,((self.wndSelectedDate:GetData().epoch)-43199),((self.wndSelectedDate:GetData().epoch)+43199))
+	   self:PopulateItemList(tDisplayedEvents) 
+		Print(self.wndSelectedDate:GetData().epoch .. " is selected.")
+	end
+end
+
+-----------------------------------------------------------------------------------------------
+-- Calendar Grid Button Functions
+-----------------------------------------------------------------------------------------------
+function EventManager:OnNextMonthButton(wndHandler,wndControl, eMouseButton)
+local month = tDisplayedMonth.month
+month = month + 1
+if month > 12 then
+	month = month - 12
+	tDisplayedMonth.year = tDisplayedMonth.year + 1
+end
+tDisplayedMonth.month = month
+ViewingMonthHeader = {strMonth = os.date("%B", os.time(tDisplayedMonth)), nYear = os.date("%Y", os.time(tDisplayedMonth))}
+CalArray = Calendar:BuildCalendarTable(tDisplayedMonth)
+self:ConstructCalendarGrid(CalArray)
+local StartTime, EndTime = self:DefineFilterParams(tDisplayedMonth, "month")
+tDisplayedEvents = self:FilterDisplayedEvents(tEvents,StartTime,EndTime)
+self:PopulateItemList(tDisplayedEvents)
+end
+
+function EventManager:OnLastMonthButton(wndHandler,wndControl, eMouseButton)
+local month = tDisplayedMonth.month
+month = month - 1
+if month < 1 then
+	month = month + 12
+	tDisplayedMonth.year = tDisplayedMonth.year - 1
+end
+tDisplayedMonth.month = month
+ViewingMonthHeader = {strMonth = os.date("%B", os.time(tDisplayedMonth)), nYear = os.date("%Y", os.time(tDisplayedMonth))}
+CalArray = Calendar:BuildCalendarTable(tDisplayedMonth)
+local StartTime, EndTime = self:DefineFilterParams(tDisplayedMonth, "month")
+tDisplayedEvents = self:FilterDisplayedEvents(tEvents,StartTime,EndTime)
+self:ConstructCalendarGrid(CalArray)
+self:PopulateItemList(tDisplayedEvents)
+end
+
+
+
+-----------------------------------------------------------------------------------------------
 -- EventManager Instance
----
+-----------------------------------------------------------------------------------------------
 local EventManagerInst = EventManager:new()
 EventManagerInst:Init()

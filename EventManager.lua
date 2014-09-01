@@ -28,7 +28,7 @@ local nBacklogCreationTime = 0
 local ProcessDupe = false
 local nEventId = nil
 local count = 0
-MsgTrigger = ""
+local MsgTrigger = ""
 local MajorVersionRewrite = false
 local ShowMajorVersionWarning = false
 local MessageToSend = false
@@ -42,7 +42,10 @@ local tDisplayedMonth = {}
 local ViewingMonthHeader = {}
 local CalArray = {}
 local tDisplayedEvents = {}
-
+local ItemToRemove = false
+local bSignUpTank = false
+local bSignUpHealer = false
+local bSignUpDPS = false
 
 local setmetatable = setmetatable
 local Apollo = Apollo
@@ -59,7 +62,7 @@ local string = string
 local os = os
 local Event_FireGenericEvent = Event_FireGenericEvent
 local ChatSystemLib = ChatSystemLib
-local ItemToRemove
+local RequestReloadUI = RequestReloadUI
 
 
 
@@ -230,7 +233,7 @@ function EventManager:OnDocLoaded()
 	Apollo.RegisterEventHandler("WindowManagementReady", 			"OnWindowManagementReady", self)
 	Apollo.RegisterEventHandler("WindowMove",						"OnWindowMove", self)
 	self.timerDelay = ApolloTimer.Create(1, false, "OnDelayTimer", self)
-	self.tTimer = ApolloTimer.Create(30, true, "OnMsgTimer", self)
+	self.tTimer = ApolloTimer.Create(60, true, "OnMsgTimer", self)
 
 
 
@@ -301,7 +304,7 @@ function EventManager:OnEventManagerOn()
 
 	CalArray = Calendar:BuildCalendarTable(tDisplayedMonth)
 
-	SendVarToRover("CalArray",CalArray)
+	--SendVarToRover("CalArray",CalArray)
 	self:ConstructCalendarGrid(CalArray)
 	local StartTime,EndTime = self:DefineFilterParams(tDisplayedMonth,"month")
 	tDisplayedEvents = self:FilterDisplayedEvents(tEvents,StartTime,EndTime)
@@ -360,13 +363,13 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 		
 		MsgTrigger = "New Channel User Ping Reply."
 		if strSender == GameLib.GetPlayerUnit():GetName() then
-			tMetaData.nLatestUpdate = os.time()
+				tMetaData.nLatestUpdate = os.time()
 		else
 			self:EventsMessenger(MsgTrigger)
 		end
 	end
 
-	if tMsg then
+	if tMsg and strSender ~= GameLib.GetPlayerUnit():GetName() then
 		self:ImportLiveEvents(tMsg.tEvents)
 	end
 
@@ -392,13 +395,14 @@ function EventManager:OnEventManagerMessage(channel, tMsg, strSender)		--changed
 	------SendVarToRover("MessageFlag", MessageToSend)
 
 	
-		tMetaData.nLatestUpdate = os.time()
+
 	if MessageToSend == true then
+		tMetaData.nLatestUpdate = os.time()
 		MsgTrigger = MsgTrigger
 		self:EventsMessenger(MsgTrigger)
 	end
 	------Print("Incoming Message Processing Complete")
-	self:PopulateItemList(tEvents)
+	self:PopulateItemList(tDisplayedEvents)
 	self:ConstructCalendarGrid(CalArray)
 	MessageToSend = false
 
@@ -432,9 +436,9 @@ function EventManager:EventsMessenger(strTrigger)
     -- send the message to other users
    if EventsChan == nil then
     	------Print("Events Manager Error: Cannot send sync data unless sync channel has been selected")
-    	self:PopulateItemList(tEvents)
+    	self:PopulateItemList(tDisplayedEvents)
    else
-    	self:PopulateItemList(tEvents)
+    	self:PopulateItemList(tDisplayedEvents)
     	EventsChan:SendMessage(t)
 
 	    -- here we "send" the message to ourselves by calling OnEventManagerMessage directly
@@ -442,15 +446,16 @@ function EventManager:EventsMessenger(strTrigger)
 	end
 end
 
-function EventManager:CleanTable()
-	LocalEvents = {}
-	for key, Event in pairs(tEvents) do
+function EventManager:CleanTable(t)
+	local LocalEvents = {}
+	for key, Event in pairs(t) do
 		--------SendVarToRover("CleaningKey", key)
 		--------SendVarToRover("CleaningValue", EventId)
-		if Event.nEventSortValue < tonumber(os.time())-3600 then
+		if Event.strEventStatus == "Canceled" and Event.nEventSortValue < tonumber(os.time()) then
 			LocalEvents[key] = nil
-		end
-		if Event.EventSyncChannel == tMetaData.SyncChannel then
+		elseif Event.nEventSortValue < tonumber(os.time())-3600 then
+			LocalEvents[key] = nil
+		elseif Event.EventSyncChannel == tMetaData.SyncChannel then
 			LocalEvents[Event.EventId] = Event
 		end
 	end
@@ -505,6 +510,7 @@ function EventManager:OnNewEventOn( wndHandler, wndControl, eMouseButton )
 end
 
 function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
+
 	self.wndNew = wndControl:GetParent()
 	local NewEventEntry = nil
 	local NewBacklogEvent = {}
@@ -591,7 +597,7 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 	--------SendVarToRover("NewEventBacklogkey", NewEventId)
 
 	self.wndNew:Show(false)
-	self:PopulateItemList(tEvents)
+	self:PopulateItemList(tDisplayedEvents)
 	MsgTrigger = MsgTrigger
 	self:EventsMessenger(MsgTrigger)
 	tMetaData.nLatestUpdate = os.time()
@@ -695,7 +701,7 @@ function EventManager:OnEventEditSubmit(wndHandler,wndControl,eMouseButton)
 	MsgTrigger = "Event Edited by owner"
 	self:EventsMessenger(MsgTrigger)
 	tMetaData.nLatestUpdate = os.time()
-	self:PopulateItemList(tEvents)	
+	self:PopulateItemList(tDisplayedEvents)	
 end
 
 
@@ -757,7 +763,7 @@ function EventManager:OnSignUpSubmit(wndHandler, wndControl, eMouseButton)
 	MsgTrigger = "New attendee added to backlog for this event."
 
 	----Print("Sign Up request sent for "..EventName)
-	self:PopulateItemList(tEvents)
+	self:PopulateItemList(tDisplayedEvents)
 	self.wndSignUp:Show(false)
 	
 	MsgTrigger = MsgTrigger
@@ -801,7 +807,7 @@ function EventManager:OnEventDeclined (wndHandler, wndControl, eMouseButton)
 
 
 
-	self:PopulateItemList(tEvents)
+	self:PopulateItemList(tDisplayedEvents)
 
 	self:EventsMessenger(MsgTrigger)
 end 
@@ -860,7 +866,7 @@ function EventManager:PopulateItemList(list)
 	self.wndItemList:DestroyChildren()
 	self.wndSelectedListItem = nil
 	
-	list = self:CleanTable()
+	list = self:CleanTable(list)
 	if list == nil then return
 	else 
     -- add 20 items
@@ -889,7 +895,7 @@ function EventManager:AddItem(i)
 	self.tItems[i] = wnd
 
 	-- Build text for display in list item
-	local tEvent = tEvents[i]
+	local tEvent = tDisplayedEvents[i]
 	
 	local tEventInfo = tEvent.Detail
 	local tEventAttendees = tEventInfo.tCurrentAttendees
@@ -1057,10 +1063,13 @@ function EventManager:OnListItemSelected(wndHandler, wndControl)
 			for idx, player in pairs(SelectedEvent.Detail.tCurrentAttendees) do
 				if player.Name == GameLib.GetPlayerUnit():GetName() and player.Status == "Attending" then --GameLib.GetPlayerUnit():GetName() then
 					ShowSignUpButton = false
+					break
 				end
 			end
 			if ShowSignUpButton == true then
 				self.wndSelectedListItemDetail:FindChild("SignUpButton"):Show(true)
+			else
+				self.wndSelectedListItemDetail:FindChild("SignUpButton"):Show(false)
 			end
 		end
 
@@ -1321,6 +1330,7 @@ function EventManager:ImportLiveEvents(EventsMsg)
 		for IncomingId, IncomingEvent in pairs(EventsMsg) do
 			NewEvent = true
 			if IncomingEvent.nEventSortValue < (os.time() - 3600) then
+				NewEvent = false
 				--Print("Event is old by: "..(((IncomingEvent.nEventSortValue - (os.time()-3600))/3600)/24).."days")
 			else
 				for EventId, LocalEvent in pairs(tEvents) do
@@ -1332,7 +1342,7 @@ function EventManager:ImportLiveEvents(EventsMsg)
 		if NewEvent == true then
 			tEvents[IncomingId] = IncomingEvent
 			MessageToSend = true
-			MessageTrigger = "Added another player's event to live event."
+			MsgTrigger = "Added another player's event to live event."
 			ProcessedCount = ProcessedCount + 1
 		end
 			------SendVarToRover("Processed tEvents", ProcessedCount)
@@ -1651,12 +1661,12 @@ function EventManager:FilterDisplayedEvents(tEvents,StartTime,EndTime)
 		else
 		end 
 	end
-	SendVarToRover("tDisplayedEvents",tDisplayedEvents)
+	--SendVarToRover("tDisplayedEvents",tDisplayedEvents)
 	return tDisplayedEvents
 end
 
 function EventManager:DefineFilterParams(tDisplayedMonth, term)
-	SendVarToRover("Filter table",tDisplayedMonth)
+	--SendVarToRover("Filter table",tDisplayedMonth)
 	local DisplayedStartTime = 0
 	local DisplayedEndTime = 0
 	local StartTime
@@ -1776,37 +1786,45 @@ function EventManager:AddCalendarItem(i)
 	wnd:FindChild("SelectedDayHighlight"):Show(false)
 	local wndEventNotification = wnd:FindChild("ActiveEventsIcon")
 	local DailyEvents = 0
+	local IconToolTipEventNames = {}
 	-- keep track of the window item created
 	--self.CalendarItems[i] = wnd
-	wndEventNotification:Show(false)
-	-- give it a piece of data to refer to 
+	wndEventNotification:Show(false) -- hide notification icon on all calendar grid items
+
+	
 	local wndDateText = wnd:FindChild("DateText")
 	if wndDateText then -- make sure the text wnd exist
-		wndDateText:SetText(CalArray[i].value) -- set the item wnd's text to "item i"
-		if CalArray[i].GridType == "Active" then
+		wndDateText:SetText(CalArray[i].value) -- Set the Date value in the upper right of the calendar grid
+		if CalArray[i].GridType == "Active" then  -- set Current Month's Date value highlighted
 			wndDateText:SetTextColor(kcrNormalText)
 		else
-			wndDateText:SetTextColor(kcrDeadDaysText)
-		wnd:FindChild("SelectedDayHighlight"):Show(false)
+			wndDateText:SetTextColor(kcrDeadDaysText)  -- set Leading and Trailing Date values to dark gray
+			wnd:FindChild("SelectedDayHighlight"):Show(false)  -- remove highlighting overlay from previous selected date
 		end
 		
+		-- Build and display event notification icons for each calendar grid day
 		for id, event in pairs(tEvents) do
 
-			if CalArray[i].epoch-43199 < event.nEventSortValue and event.nEventSortValue < CalArray[i].epoch + 43199 then
-				SendVarToRover("Event Time",event.nEventSortValue)
-				SendVarToRover("CalArray[i].epoch", CalArray[i].epoch)
+			if event.strEventStatus == "Active" and CalArray[i].epoch-43199 < event.nEventSortValue and event.nEventSortValue < CalArray[i].epoch + 43199 and event.EventSyncChannel == tMetaData.SyncChannel then
+				--SendVarToRover("Event Time",event.nEventSortValue)
+				--SendVarToRover("CalArray[i].epoch", CalArray[i].epoch)
 				DailyEvents = DailyEvents + 1
+				table.insert(IconToolTipEventNames,event.Detail.EventName)
 			end
 		end
-		SendVarToRover("DailyEvents",DailyEvents)
+		--SendVarToRover("DailyEvents",DailyEvents)
 		if DailyEvents > 0 and DailyEvents < 2 then 
 			wndEventNotification:Show(true)
 			wndEventNotification:SetText(DailyEvents.." event")
+			wnd:SetTooltip("Event today: \n \n"..table.concat(IconToolTipEventNames, '\n'))
+
 		elseif DailyEvents > 1 then
 			wndEventNotification:Show(true)
 			wndEventNotification:SetText(DailyEvents.." events")
+			wnd:SetTooltip("Events today: \n \n"..table.concat(IconToolTipEventNames, '\n'))
 		end
 
+	-- give it a piece of data to refer to 
 	wnd:SetData(CalArray[i])
 
 	end
@@ -1817,7 +1835,7 @@ end
 
 -- when a list item is selected
 function EventManager:OnCalendarDateSelected(wndHandler, wndControl)
-	SendVarToRover("selected date",self.wndSelectedDate)
+	--SendVarToRover("selected date",self.wndSelectedDate)
     -- make sure the wndControl is valid
     if wndHandler ~= wndControl then
         return
@@ -1848,7 +1866,6 @@ function EventManager:OnCalendarDateSelected(wndHandler, wndControl)
 		wndSelectedDay:Show(true)
 		tDisplayedEvents = self:FilterDisplayedEvents(tEvents,((self.wndSelectedDate:GetData().epoch)-43199),((self.wndSelectedDate:GetData().epoch)+43199))
 	   self:PopulateItemList(tDisplayedEvents) 
-		Print(self.wndSelectedDate:GetData().epoch .. " is selected.")
 	end
 end
 

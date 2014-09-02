@@ -954,7 +954,7 @@ function EventManager:AddItem(i)
 		if tEvent.strEventStatus == "Canceled" then
 			strEventInfo = "The event, "..tEventInfo.EventName..", scheduled for "..string.format("%02d",tEventInfo.Month).."/"..string.format("%02d",tEventInfo.Day).."/"..tEventInfo.Year..", at\n"..
 			string.format("%02d",tEventInfo.Hour)..":"..string.format("%02d",tEventInfo.Minute).." "..tEventInfo.AmPm.." "..
-			string.upper(tEventInfo.TimeZone).."\nhas been cancelled by "..tEvent.Owner
+			string.upper(tEventInfo.TimeZone).."\nhas been canceled by "..tEvent.Owner
 			SignUpButton:Show(false)
 			DeclineButton:Show(false)
 		else

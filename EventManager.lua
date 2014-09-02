@@ -887,7 +887,6 @@ function EventManager:AddItem(i)
 	local wndSelectedItemHighlight = wnd:FindChild("SelectedListItemHighlight"):Show(false)
 	local SignUpButton = wnd:FindChild("SignUpButton")
 	local DeclineButton = wnd:FindChild("DeclineButton")
-	local PendingImage = wnd:FindChild("PendingImage")
 	local strEventInfo = ""
 	local PlayerAttending = false
 	
@@ -930,15 +929,12 @@ function EventManager:AddItem(i)
 	if PlayerAttending == true then 
 		SignUpButton:Show(false)
 		DeclineButton:Show(true)
-		PendingImage:Show(false)
 	elseif PlayerAttending == false then
 		SignUpButton:Show(true)
 		DeclineButton:Show(false)
-		PendingImage:Show(false)
 	else
 		SignUpButton:Show(true)
 		DeclineButton:Show(true)
-		PendingImage:Show(false)
 	end
 	tEventInfo = tEventInfo
 	tEventAttendees = tEventInfo.tCurrentAttendees
@@ -959,10 +955,8 @@ function EventManager:AddItem(i)
 			strEventInfo = "The event, "..tEventInfo.EventName..", scheduled for "..string.format("%02d",tEventInfo.Month).."/"..string.format("%02d",tEventInfo.Day).."/"..tEventInfo.Year..", at\n"..
 			string.format("%02d",tEventInfo.Hour)..":"..string.format("%02d",tEventInfo.Minute).." "..tEventInfo.AmPm.." "..
 			string.upper(tEventInfo.TimeZone).."\nhas been cancelled by "..tEvent.Owner
-
 			SignUpButton:Show(false)
 			DeclineButton:Show(false)
-			PendingImage:Show(false)
 		else
 			strEventInfo = 	tEventInfo.EventName..".  Attendees: "..tEventInfo.nEventAttendeeCount.."/"..tEventInfo.MaxAttendees..". \n"..
 			string.format("%02d",tEventInfo.Month).."/"..string.format("%02d",tEventInfo.Day).."/"..tEventInfo.Year..", "..

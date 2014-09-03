@@ -448,10 +448,22 @@ end
 
 function EventManager:CleanTable(t)
 	local LocalEvents = {}
+	local attending = false
 	for key, Event in pairs(t) do
 		--------SendVarToRover("CleaningKey", key)
 		--------SendVarToRover("CleaningValue", EventId)
+		for idx, attendee in pairs(Event.Detail.tCurrentAttendees) do
+			attending = false
+			if attendee.Name == GameLib.GetPlayerUnit():GetName() then 
+				if attendee.Status == "Attending" then
+					attending = true
+					break
+				end
+			end
+		end
 		if Event.strEventStatus == "Canceled" and Event.nEventSortValue < tonumber(os.time()) then
+			LocalEvents[key] = nil
+		elseif Event.strEventStatus == "Canceled" and attending == false then
 			LocalEvents[key] = nil
 		elseif Event.nEventSortValue < tonumber(os.time())-3600 then
 			LocalEvents[key] = nil
@@ -889,6 +901,8 @@ function EventManager:AddItem(i)
 	local DeclineButton = wnd:FindChild("DeclineButton")
 	local strEventInfo = ""
 	local PlayerAttending = false
+	local HideButton = wnd:FindChild("HideCanceledEvent")
+
 	
 	-- keep track of the window item created
 	self.tItems[i] = wnd
@@ -903,6 +917,7 @@ function EventManager:AddItem(i)
 	tEventInfo.nCurrentTanks = 0
 	tEventInfo.nCurrentHealers = 0
 	tEventInfo.nCurrentDPS = 0
+	HideButton:Show(false)
 	--------SendVarToRover("Populated Items", tEvent)
 		for idx, player in pairs(tEventInfo.tCurrentAttendees) do
 		if player.Name == GameLib.GetPlayerUnit():GetName() then	
@@ -952,11 +967,22 @@ function EventManager:AddItem(i)
 			tEventInfo.nCurrentTanks, tEventInfo.nCurrentHealers, tEventInfo.nCurrentDPS = self:RoleCount(tEventInfo.tCurrentAttendees)
 		end
 		if tEvent.strEventStatus == "Canceled" then
-			strEventInfo = "The event, "..tEventInfo.EventName..", scheduled for "..string.format("%02d",tEventInfo.Month).."/"..string.format("%02d",tEventInfo.Day).."/"..tEventInfo.Year..", at\n"..
-			string.format("%02d",tEventInfo.Hour)..":"..string.format("%02d",tEventInfo.Minute).." "..tEventInfo.AmPm.." "..
-			string.upper(tEventInfo.TimeZone).."\nhas been canceled by "..tEvent.Owner
-			SignUpButton:Show(false)
-			DeclineButton:Show(false)
+			local PlayerAttending = false
+			for idx,player in pairs(tEventAttendees) do 
+				if player.Name == GameLib.GetPlayerUnit():GetName() then
+					PlayerAttending = true
+					break
+				end
+			end
+			if PlayerAttending == true then
+				strEventInfo = "The event, "..tEventInfo.EventName..", scheduled for "..string.format("%02d",tEventInfo.Month).."/"..string.format("%02d",tEventInfo.Day).."/"..tEventInfo.Year..", at\n"..
+				string.format("%02d",tEventInfo.Hour)..":"..string.format("%02d",tEventInfo.Minute).." "..tEventInfo.AmPm.." "..
+				string.upper(tEventInfo.TimeZone).."\nhas been canceled by "..tEvent.Owner
+				SignUpButton:Show(false)
+				DeclineButton:Show(false)
+				HideButton:Show(true)
+			else
+			end
 		else
 			strEventInfo = 	tEventInfo.EventName..".  Attendees: "..tEventInfo.nEventAttendeeCount.."/"..tEventInfo.MaxAttendees..". \n"..
 			string.format("%02d",tEventInfo.Month).."/"..string.format("%02d",tEventInfo.Day).."/"..tEventInfo.Year..", "..

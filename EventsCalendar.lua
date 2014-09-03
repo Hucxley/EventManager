@@ -1,11 +1,12 @@
 -----------------------------------------------------------------------------------------------
---[[ Calendar Package for NCSoft's Wildstar.  
+-- Calendar Package for NCSoft's Wildstar.  
 -- Generates procedural calendars without relying on days of the month tables typically used in
--- lua calendars.
+-- lua calendars.  Copyright.Thoughtcrime[AllRightsReserved] == true
+-- if you use this package, you must include this header.
 
-	usage: local calendar = Apollo.GetPackage("TC:WSCalendar-1.0").tPackage
+--	usage: local calendar = Apollo.GetPackage("TC:WSCalendar-1.0").tPackage
 
-]]--
+
 -----------------------------------------------------------------------------------------------
 local MAJOR, MINOR = "TC:WSCalendar-1.0",1
 local APkg = Apollo.GetPackage(MAJOR)
@@ -47,10 +48,11 @@ local tDisplayedMonth = {}
 local kcrSelectedText = ApolloColor.new("UI_BtnTextHoloPressedFlyby")
 local kcrNormalText = ApolloColor.new("UI_BtnTextHoloNormal")
 local kcrDeadDaysText = ApolloColor.new("darkgray")
- 
+
 -----------------------------------------------------------------------------------------------
--- Initialization
+--	Init functions
 -----------------------------------------------------------------------------------------------
+
 function LibCalendar:new(o)
     o = o or {}
     setmetatable(o, self)
@@ -71,87 +73,19 @@ function LibCalendar:Init()
 	}
     Apollo.RegisterAddon(self, bHasConfigureFunction, strConfigureButtonText, tDependencies)
 end
- 
 
------------------------------------------------------------------------------------------------
--- LibCalendar OnLoad
------------------------------------------------------------------------------------------------
-function LibCalendar:OnLoad()
-    -- load our form file
-	self.xmlDoc = XmlDoc.CreateFromFile("EventsCalendar.xml")
-	self.xmlDoc:RegisterCallback("OnDocLoaded", self)
-end
-
------------------------------------------------------------------------------------------------
--- LibCalendar OnDocLoaded
------------------------------------------------------------------------------------------------
-function LibCalendar:OnDocLoaded()
-
-	if self.xmlDoc ~= nil and self.xmlDoc:IsLoaded() then
-	    self.wndMain = Apollo.LoadForm(self.xmlDoc, "LibCalendarForm", nil, self)
-		if self.wndMain == nil then
-			Apollo.AddAddonErrorText(self, "Could not load the main window for some reason.")
-			return
-		end
-		
-		-- item list
-		self.wndItemList = self.wndMain:FindChild("ItemList")
-	    self.wndMain:Show(false, true)
-
-		-- if the xmlDoc is no longer needed, you should set it to nil
-		-- self.xmlDoc = nil
-		
-		-- Register handlers for events, slash commands and timer, etc.
-		-- e.g. Apollo.RegisterEventHandler("KeyDown", "OnKeyDown", self)
-		Apollo.RegisterSlashCommand("calendar", "OnLibCalendarOn", self)
-
-
-
-		tCurrentDay = os.date("*t",os.time())
-		tDisplayedMonth = os.date("*t",os.time({year = tCurrentDay.year, month = tCurrentDay.month, day = 15, hour, 00}))
-		ViewingMonth = {strMonth = os.date("%B", os.time(tDisplayedMonth)), nYear = os.date("%Y", os.time(tDisplayedMonth))}
-		self:BuildCalendarTable(tDisplayedMonth)
-
-	end
-end
 
 -----------------------------------------------------------------------------------------------
 -- LibCalendar Functions
------------------------------------------------------------------------------------------------
--- Define general functions here
-
--- on SlashCommand "/horztest"
-function LibCalendar:OnLibCalendarOn()
-	self.wndMain:Invoke() -- show the window
-
-	-- populate the item list
-	self:ConstructCalendarGrid(CalArray)
-end
-
-
-
-
-
------------------------------------------------------------------------------------------------
--- LibCalendarForm Functions
------------------------------------------------------------------------------------------------
--- when the OK button is clicked
-function LibCalendar:OnOK()
-	self.wndMain:Close() -- hide the window
-end
-
--- when the Cancel button is clicked
-function LibCalendar:OnCancel()
-	self.wndMain:Close() -- hide the window
-end
-
+----------------------------------------------------------------------------------------------- 
 function LibCalendar:BuildCalendarTable(tDisplayedMonth)
-SendVarToRover("Displayed Month",tDisplayedMonth)
+--SendVarToRover("Displayed Month",tDisplayedMonth)
 usermonth = tDisplayedMonth.month
 oldcolumn = 1
 monthdayscount = 1
 deaddays = {}
-CalArray = {}
+CalArray = {
+}
 CalDisplay = {}
 newepoch  = 0
 trailingdays = 0
@@ -220,7 +154,8 @@ end
 
 
 
-
+--[[  to use the Calendar, you would include something like the following to create your 
+		Calendar Grid.
 -----------------------------------------------------------------------------------------------
 -- ItemList Functions
 -----------------------------------------------------------------------------------------------
@@ -271,7 +206,7 @@ end
 
 -- when a list item is selected
 function LibCalendar:OnListItemSelected(wndHandler, wndControl)
-	SendVarToRover("selected list item",self.wndSelectedListItem)
+	--SendVarToRover("selected list item",self.wndSelectedListItem)
     -- make sure the wndControl is valid
     if wndHandler ~= wndControl then
         return
@@ -329,7 +264,7 @@ self:BuildCalendarTable(tDisplayedMonth)
 self:ConstructCalendarGrid(CalArray)
 end
 
-
+]]--
 -----------------------------------------------------------------------------------------------
 -- LibCalendar Instance
 -----------------------------------------------------------------------------------------------

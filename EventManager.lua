@@ -295,6 +295,7 @@ end
 function EventManager:OnEventManagerOn()
 	MsgTrigger = "init"
 	self:EventsMessenger(MsgTrigger)
+	self.wndMain:RecalculateContentExtents()
 	self.wndMain:Invoke() -- show the window
 	for key, Event in pairs(tEvents) do
 		if Event.nEventSortValue < tonumber(os.time())-3600 then
@@ -1000,6 +1001,7 @@ function EventManager:AddItem(i)
 			for key, name in pairs(tEventInfo.tCurrentAttendees) do
 				table.insert(AttendeeList,tEventInfo.tCurrentAttendees[key].Name)
 			end
+		wnd:RecalculateContentExtents()
 		wnd:SetData(tEvent)
 		wnd:SetTooltip(table.concat(AttendeeList, '\n'))
 	end
